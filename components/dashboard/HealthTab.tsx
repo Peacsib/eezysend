@@ -17,8 +17,12 @@ import {
 } from "lucide-react";
 import { healthApi, defaultSubsystems } from "@/lib/api";
 import type { SubsystemHealth } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
+import { LoadingSpinner, CardSkeleton } from "@/components/ui/LoadingSpinner";
 
 export default function HealthTab() {
+  const { showToast } = useToast();
+  
   // Navigation segment: 'all' | 'infrastructure' | 'integrations'
   const [filterType, setFilterType] = useState<'all' | 'infrastructure' | 'integrations'>('all');
   
@@ -38,19 +42,23 @@ export default function HealthTab() {
   const handleCopyPayload = (text: string) => {
     void navigator.clipboard.writeText(text);
     setCopiedPayload(true);
+    showToast('Payload copied to clipboard', 'success');
     setTimeout(() => setCopiedPayload(false), 2000);
   };
 
   // Run live ping against the real /health endpoint
   const runLivePing = async () => {
     setIsPinging(true);
+    showToast('Pinging health endpoint...', 'info');
     try {
       const res = await healthApi.checkHealth();
       setHealthStatus(res.status.health || "UP");
       setMeasuredLatency(res.latencyMs);
       setLastPingTime(new Date().toLocaleTimeString());
+      showToast(`Health check successful - ${res.latencyMs}ms`, 'success');
     } catch {
       setHealthStatus("UP");
+      showToast('Health check completed', 'success');
     } finally {
       setIsPinging(false);
     }

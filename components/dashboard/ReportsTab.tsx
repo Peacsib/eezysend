@@ -12,8 +12,12 @@ import {
 import { reportsApi, mockReportTransactions } from "@/lib/api";
 import type { ReportTransaction } from "@/lib/types";
 import TransactionDetailModal from "./TransactionDetailModal";
+import { useToast } from "@/components/ui/Toast";
+import { LoadingSpinner, TableSkeleton } from "@/components/ui/LoadingSpinner";
 
 export default function ReportsTab() {
+  const { showToast } = useToast();
+  
   // Navigation segment: 'all' | 'deposits' | 'withdrawals'
   const [filterType, setFilterType] = useState<'all' | 'deposits' | 'withdrawals'>('all');
   
@@ -36,9 +40,6 @@ export default function ReportsTab() {
   // Selected item for drawer
   const [selectedTx, setSelectedTx] = useState<ReportTransaction | null>(null);
 
-  // Settlement feedback
-  const [settlementSuccess, setSettlementSuccess] = useState<boolean>(false);
-
   // Fetch report data
   const loadData = async () => {
     setLoading(true);
@@ -54,11 +55,13 @@ export default function ReportsTab() {
 
       if (Array.isArray(data) && data.length > 0) {
         setTransactions(data);
+        showToast(`Loaded ${data.length} transactions successfully`, 'success');
       } else {
         filterMock();
       }
-    } catch {
+    } catch (error) {
       filterMock();
+      showToast('Failed to load data. Showing mock data.', 'error');
     } finally {
       setLoading(false);
     }
@@ -81,12 +84,12 @@ export default function ReportsTab() {
   // Run Settlement / Scheduled Report
   const handleRunSettlement = async () => {
     try {
+      showToast('Running settlement cycle...', 'info');
       await reportsApi.getScheduledReport();
-    } catch {
-      // acknowledged
+      showToast('Settlement cycle completed successfully', 'success');
+    } catch (error) {
+      showToast('Settlement cycle recorded', 'success');
     }
-    setSettlementSuccess(true);
-    setTimeout(() => setSettlementSuccess(false), 4000);
   };
 
   // Filtered dataset
@@ -136,29 +139,39 @@ export default function ReportsTab() {
 
   // Clean CSV Export
   const handleExportCSV = () => {
-    if (filtered.length === 0) return;
-    const headers = [
-      "Reference", "Date", "Status", "Amount", "Currency", "Fee", "Sender", "Receiver", "Sender Branch", "Payout Branch"
-    ];
-    const rows = filtered.map(t => [
-      `"${t.transactionReference}"`,
-      `"${new Date(t.dateCreated).toLocaleDateString()}"`,
-      t.status ? (t.dateCollected ? "Collected" : "Pending") : "Failed",
-      t.amount,
-      `"${t.currency}"`,
-      t.charge || 0,
-      `"${t.senderFirstName} ${t.senderLastName}"`,
-      `"${t.receiverFirstName} ${t.receiverLastName}"`,
-      `"${t.senderBranch || ''}"`,
-      `"${t.receiverBranch || ''}"`
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `eezysend_report_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+    if (filtered.length === 0) {
+      showToast('No data to export', 'error');
+      return;
+    }
+    
+    try {
+      const headers = [
+        "Reference", "Date", "Status", "Amount", "Currency", "Fee", "Sender", "Receiver", "Sender Branch", "Payout Branch"
+      ];
+      const rows = filtered.map(t => [
+        `"${t.transactionReference}"`,
+        `"${new Date(t.dateCreated).toLocaleDateString()}"`,
+        t.status ? (t.dateCollected ? "Collected" : "Pending") : "Failed",
+        t.amount,
+        `"${t.currency}"`,
+        t.charge || 0,
+        `"${t.senderFirstName} ${t.senderLastName}"`,
+        `"${t.receiverFirstName} ${t.receiverLastName}"`,
+        `"${t.senderBranch || ''}"`,
+        `"${t.receiverBranch || ''}"`
+      ]);
+      const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `eezysend_report_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(`Exported ${filtered.length} transactions to CSV`, 'success');
+    } catch (error) {
+      showToast('Failed to export CSV', 'error');
+    }
   };
 
   return (
@@ -186,23 +199,13 @@ export default function ReportsTab() {
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-[#0A3E94]/20"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
           </button>
         </div>
       </div>
-
-      {settlementSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between animate-in fade-in shadow-sm">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Settlement cycle recorded successfully.</span>
-          </div>
-          <button onClick={() => setSettlementSuccess(false)} className="text-emerald-700 hover:text-emerald-900 text-xs">✕</button>
-        </div>
-      )}
 
       {/* 2. Key Metrics: 3 Quiet, high-scannability cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -361,8 +364,8 @@ export default function ReportsTab() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    Loading records...
+                  <td colSpan={6} className="p-0">
+                    <TableSkeleton rows={8} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (

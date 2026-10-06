@@ -93,7 +93,7 @@ export default function Sidebar({
 
         {/* Institution Info Card */}
         <div className="p-3 rounded-xl bg-white/10 border border-white/20 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-white flex-shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0">
             <Building2 className="w-4 h-4" />
           </div>
           <div className="overflow-hidden">
@@ -161,7 +161,7 @@ export default function Sidebar({
       <div className="space-y-3 pt-4 border-t border-white/10">
         <div className="p-3 rounded-xl bg-white/10 border border-white/20 flex items-center justify-between">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-eezysend-blue font-bold text-xs flex-shrink-0 shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-eezysend-blue font-bold text-xs shrink-0 shadow-sm">
               {initials}
             </div>
             <div className="overflow-hidden">

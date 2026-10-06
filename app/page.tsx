@@ -35,7 +35,7 @@ const featureCards = [
 export default function Home() {
   return (
     <div
-      className="min-h-screen w-full relative overflow-x-hidden bg-cover bg-[position:28%_center] sm:bg-[position:30%_center] xl:bg-center"
+      className="min-h-screen w-full relative overflow-x-hidden bg-cover bg-position-[28%_center] sm:bg-position-[30%_center] xl:bg-center"
       style={{
         backgroundImage: "url('/hero2.png')",
       }}
@@ -52,7 +52,7 @@ export default function Home() {
           />
 
           {/* Top spacer matching the height of the baked-in logo in hero2.png */}
-          <div className="h-[40vh] sm:h-[41vh] xl:h-[42vh] flex-shrink-0 pointer-events-none" />
+          <div className="h-[40vh] sm:h-[41vh] xl:h-[42vh] shrink-0 pointer-events-none" />
 
           {/* Tagline - Centered precisely against the entire EezySend logo in hero2.png with balanced spacing */}
           <div className="w-full flex justify-center mt-2.5 sm:mt-3 hero-tagline-aligned pointer-events-none">

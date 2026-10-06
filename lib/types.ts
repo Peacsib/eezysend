@@ -17,7 +17,7 @@ export interface AuthResponse {
 }
 
 export interface LoginCredentials {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -129,3 +129,102 @@ export interface Notification {
   createdAt: string;
   actionUrl?: string;
 }
+
+// =========================================================
+// Reports Controller Types (EezySend Local Remit Backend)
+// =========================================================
+export interface ReportTransaction {
+  dateCreated: string;
+  status: boolean;
+  narrative?: string;
+  dateCollected?: string;
+  transactionReference: string;
+  internalReferenceID?: string;
+  transactionType?: string;
+  currency: string;
+  amount: number;
+  receiverFirstName: string;
+  receiverMiddleName?: string;
+  receiverLastName: string;
+  receiverNationalId: string;
+  receiverPhone: string;
+  receiverAddress?: string;
+  receiverTown?: string;
+  senderFirstName: string;
+  senderMiddleName?: string;
+  senderLastName: string;
+  senderNationalId: string;
+  senderPhone: string;
+  senderAddress?: string;
+  senderTown?: string;
+  senderTeller?: string;
+  senderBranch?: string;
+  receiverTeller?: string;
+  receiverBranch?: string;
+  withdrawalReference?: string;
+  reported?: boolean;
+  charge?: string | number;
+  withdrawalReported?: boolean;
+  channel?: string;
+  tax?: number;
+}
+
+export interface ReportDateParams {
+  startDate: string;
+  endDate: string;
+}
+
+export type ReportEndpointType = 'all' | 'byDate' | 'deposits' | 'withdrawals';
+
+// =========================================================
+// Transactions Controller Types
+// =========================================================
+export interface ReversalResponse {
+  status: boolean;
+  narration?: string;
+  transactionModel?: ReportTransaction;
+}
+
+export type TransactionLookupType = 'reference' | 'withdrawalRef' | 'depositRef';
+
+// =========================================================
+// SMS Controller Types (EezySend SMS Gateway)
+// =========================================================
+export interface SMSModel {
+  transactionReference: string;
+  dateCreated: string;
+  senderPhone: string;
+  senderStatus: boolean;
+  receiverPhone: string;
+  receiverStatus: boolean;
+}
+
+export interface PageSMSModel {
+  content: SMSModel[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first?: boolean;
+  last?: boolean;
+  empty?: boolean;
+}
+
+// =========================================================
+// Health Controller Types (EezySend Health & Diagnostics)
+// =========================================================
+export interface HealthResponse {
+  health: 'UP' | 'DOWN' | string;
+}
+
+export interface SubsystemHealth {
+  id: string;
+  name: string;
+  category: string;
+  status: 'UP' | 'DEGRADED' | 'DOWN';
+  endpoint: string;
+  latencyMs: number;
+  lastChecked: string;
+  description: string;
+}
+

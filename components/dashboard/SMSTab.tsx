@@ -20,8 +20,12 @@ import {
 } from "lucide-react";
 import { smsApi, mockSMSList, mockReportTransactions } from "@/lib/api";
 import type { SMSModel, ReportTransaction } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
+import { TableSkeleton } from "@/components/ui/LoadingSpinner";
 
 export default function SMSTab() {
+  const { showToast } = useToast();
+  
   // Navigation segment: 'all' | 'delivered' | 'failed'
   const [filterType, setFilterType] = useState<'all' | 'delivered' | 'failed'>('all');
   
@@ -32,7 +36,6 @@ export default function SMSTab() {
   
   // Resend action loading map (keyed by transactionReference)
   const [resendingMap, setResendingMap] = useState<Record<string, boolean>>({});
-  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Selected SMS record for detail / preview modal
   const [selectedSMS, setSelectedSMS] = useState<SMSModel | null>(null);
@@ -42,6 +45,7 @@ export default function SMSTab() {
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedText(text);
+    showToast('Phone number copied', 'success');
     setTimeout(() => setCopiedText(null), 2000);
   };
 
@@ -83,8 +87,7 @@ export default function SMSTab() {
         }
 
         setResendingMap(prev => ({ ...prev, [txRef]: false }));
-        setSuccessToast(`Collection SMS re-dispatched successfully for voucher ${txRef}.`);
-        setTimeout(() => setSuccessToast(null), 4000);
+        showToast(`Collection SMS re-dispatched successfully for voucher ${txRef}`, 'success');
       }, 700);
     }
   };
@@ -92,16 +95,22 @@ export default function SMSTab() {
   // Direct lookup via reference
   const handleDirectSearch = async () => {
     const q = searchQuery.trim();
-    if (!q) return;
+    if (!q) {
+      showToast('Please enter a transaction reference', 'error');
+      return;
+    }
 
     setLoading(true);
     try {
       const match = await smsApi.getSMSByReference(q);
       if (match && match.transactionReference) {
         setSelectedSMS(match);
+        showToast('SMS record found', 'success');
+      } else {
+        showToast('SMS record not found', 'error');
       }
     } catch {
-      // Handled via filtered array
+      showToast('Failed to fetch SMS record', 'error');
     } finally {
       setLoading(false);
     }
@@ -192,24 +201,13 @@ export default function SMSTab() {
         <div className="flex items-center gap-2.5">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-[#0A3E94]/20"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
           </button>
         </div>
       </div>
-
-      {/* Success Notification Banner */}
-      {successToast && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between animate-in fade-in shadow-sm">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{successToast}</span>
-          </div>
-          <button onClick={() => setSuccessToast(null)} className="text-emerald-700 hover:text-emerald-900 text-xs">✕</button>
-        </div>
-      )}
 
       {/* 2. Key Metrics: 3 Quiet, high-scannability cards matching ReportsTab */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -320,8 +318,8 @@ export default function SMSTab() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
-                    Loading SMS delivery records...
+                  <td colSpan={5} className="p-0">
+                    <TableSkeleton rows={8} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -395,7 +393,7 @@ export default function SMSTab() {
                             disabled={isResending}
                             className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1 border ${
                               !bothDelivered
-                                ? 'bg-[#EFF4FE] hover:bg-eezysend-blue text-eezysend-blue hover:text-white border-eezysend-blue/30'
+                                ? 'bg-eezysend-blue-light hover:bg-eezysend-blue text-eezysend-blue hover:text-white border-eezysend-blue/30'
                                 : 'bg-white/50 backdrop-blur-sm hover:bg-white/40 text-slate-600 border-slate-200'
                             }`}
                             title="Re-dispatch collection SMS"
@@ -431,11 +429,11 @@ export default function SMSTab() {
       {/* 5. SMS Message Preview & Delivery Receipt Modal */}
       {selectedSMS && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-3xl p-6 shadow-2xl space-y-4 text-slate-800">
+          <div className="w-full max-w-lg bg-white/75 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 space-y-4 text-slate-800">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-white/30">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EFF4FE] text-eezysend-blue flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-eezysend-blue-light text-eezysend-blue flex items-center justify-center">
                   <Smartphone className="w-5 h-5" />
                 </div>
                 <div>

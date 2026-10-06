@@ -15,8 +15,12 @@ import {
 import { transactionsApi, mockReportTransactions } from "@/lib/api";
 import type { ReportTransaction, ReversalResponse } from "@/lib/types";
 import TransactionDetailModal from "./TransactionDetailModal";
+import { useToast } from "@/components/ui/Toast";
+import { TableSkeleton } from "@/components/ui/LoadingSpinner";
 
 export default function TransactionsTab() {
+  const { showToast } = useToast();
+  
   // Navigation segment: 'all' | 'pending' | 'collected' | 'reversed'
   const [filterType, setFilterType] = useState<'all' | 'pending' | 'collected' | 'reversed'>('all');
   
@@ -24,7 +28,6 @@ export default function TransactionsTab() {
   const [transactions, setTransactions] = useState<ReportTransaction[]>(mockReportTransactions);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Selected item for drawer/modal
   const [selectedTx, setSelectedTx] = useState<ReportTransaction | null>(null);
@@ -32,15 +35,16 @@ export default function TransactionsTab() {
   // Reversal dialog state
   const [reversalTarget, setReversalTarget] = useState<ReportTransaction | null>(null);
   const [reversalLoading, setReversalLoading] = useState<boolean>(false);
-  const [reversalSuccessMsg, setReversalSuccessMsg] = useState<string | null>(null);
 
   // Direct lookup handler for searching specific external references
   const handleDirectSearch = async () => {
     const q = searchQuery.trim();
-    if (!q) return;
+    if (!q) {
+      showToast('Please enter a transaction reference', 'error');
+      return;
+    }
 
     setLoading(true);
-    setErrorMessage(null);
 
     const upper = q.toUpperCase();
     try {
@@ -55,9 +59,12 @@ export default function TransactionsTab() {
 
       if (match && match.transactionReference) {
         setSelectedTx(match);
+        showToast('Transaction found', 'success');
+      } else {
+        showToast('Transaction not found', 'error');
       }
     } catch {
-      // Handled via local filtering
+      showToast('Failed to fetch transaction', 'error');
     } finally {
       setLoading(false);
     }
@@ -69,10 +76,11 @@ export default function TransactionsTab() {
     setReversalLoading(true);
 
     try {
+      showToast('Processing reversal...', 'info');
       const res: ReversalResponse = await transactionsApi.reverseTransaction(reversalTarget.transactionReference);
-      setReversalSuccessMsg(res.narration || `Voucher ${reversalTarget.transactionReference} reversed successfully. Funds refunded.`);
+      showToast(res.narration || `Voucher ${reversalTarget.transactionReference} reversed successfully`, 'success');
     } catch {
-      setReversalSuccessMsg(`Voucher ${reversalTarget.transactionReference} marked as reversed. Refund scheduled.`);
+      showToast(`Voucher ${reversalTarget.transactionReference} marked as reversed`, 'success');
     } finally {
       setReversalLoading(false);
 
@@ -98,7 +106,6 @@ export default function TransactionsTab() {
       }
 
       setReversalTarget(null);
-      setTimeout(() => setReversalSuccessMsg(null), 5000);
     }
   };
 
@@ -206,34 +213,13 @@ export default function TransactionsTab() {
         <div className="flex items-center gap-2.5">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-[#0A3E94]/20"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
           </button>
         </div>
       </div>
-
-      {/* Notifications */}
-      {reversalSuccessMsg && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between animate-in fade-in shadow-sm">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{reversalSuccessMsg}</span>
-          </div>
-          <button onClick={() => setReversalSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-900 text-xs">✕</button>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between animate-in fade-in shadow-sm">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-          <button onClick={() => setErrorMessage(null)} className="text-amber-700 hover:text-amber-900 text-xs">✕</button>
-        </div>
-      )}
 
       {/* 2. Key Metrics: 3 Quiet, high-scannability cards matching ReportsTab */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -354,8 +340,8 @@ export default function TransactionsTab() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    Loading records...
+                  <td colSpan={6} className="p-0">
+                    <TableSkeleton rows={8} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -474,7 +460,7 @@ export default function TransactionsTab() {
       {/* Reversal Confirmation Dialog */}
       {reversalTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-3xl p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md bg-white/75 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 space-y-4">
             <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-100">
               <ShieldAlert className="w-6 h-6" />
             </div>
