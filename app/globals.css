@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --color-eezysend-blue: #1e3a8a;
-  --color-eezysend-green: #16a34a;
-  --color-eezysend-lime: #84cc16;
+  --color-eezysend-blue: #0A3E94;
+  --color-eezysend-blue-hover: #083277;
+  --color-eezysend-blue-light: #EFF4FE;
+  --color-eezysend-green: #0d7a5f;
 }
 
 body {
@@ -23,7 +24,7 @@ h1, h2, h3, h4, h5, h6 {
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
-  background-image: linear-gradient(to right, var(--color-eezysend-green), var(--color-eezysend-lime));
+  background-image: linear-gradient(to right, var(--color-eezysend-green), var(--color-eezysend-blue));
 }
 
 @utility glass-effect {
@@ -42,4 +43,16 @@ h1, h2, h3, h4, h5, h6 {
 
 @utility font-body {
   font-family: 'Inter', system-ui, sans-serif;
+}
+
+@media (min-width: 1280px) {
+  .hero-tagline-aligned {
+    transform: translateX(calc(22.5vw - 38.71vh));
+  }
+}
+
+@media (min-width: 1280px) and (min-aspect-ratio: 1813/868) {
+  .hero-tagline-aligned {
+    transform: translateX(3.97vw);
+  }
 }
