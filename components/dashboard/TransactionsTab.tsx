@@ -127,6 +127,13 @@ export default function TransactionsTab() {
     return 'Ready';
   };
 
+  // Helper function to format CSV status
+  const getCSVStatus = (narrative: string | undefined, dateCollected: string | undefined) => {
+    if (narrative?.includes("[REVERSED]")) return "Reversed";
+    if (dateCollected) return "Collected";
+    return "Pending";
+  };
+
   // Filtered dataset
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -197,7 +204,7 @@ export default function TransactionsTab() {
     const rows = filtered.map(t => [
       `"${t.transactionReference}"`,
       `"${new Date(t.dateCreated).toLocaleDateString()}"`,
-      t.narrative?.includes("[REVERSED]") ? "Reversed" : t.dateCollected ? "Collected" : "Pending",
+      getCSVStatus(t.narrative, t.dateCollected),
       t.amount,
       `"${t.currency}"`,
       t.charge || 0,
@@ -427,7 +434,17 @@ export default function TransactionsTab() {
 
                       {/* Action */}
                       <td className="py-3.5 px-5 text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div 
+                          className="flex items-center justify-end gap-2" 
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.stopPropagation();
+                            }
+                          }}
+                          role="group"
+                          aria-label="Transaction actions"
+                        >
                           {!isCollected && !isReversed && (
                             <button
                               onClick={() => setReversalTarget(tx)}
