@@ -6,11 +6,8 @@ import {
   Download,
   CheckCircle2,
   Clock,
-  RotateCcw,
-  AlertCircle,
   ChevronRight,
   ShieldAlert,
-  Sparkles,
 } from "lucide-react";
 import { transactionsApi, mockReportTransactions } from "@/lib/api";
 import type { ReportTransaction, ReversalResponse } from "@/lib/types";
@@ -57,7 +54,7 @@ export default function TransactionsTab() {
         match = await transactionsApi.getByReference(q);
       }
 
-      if (match && match.transactionReference) {
+      if (match?.transactionReference) {
         setSelectedTx(match);
         showToast('Transaction found', 'success');
       } else {
@@ -107,6 +104,27 @@ export default function TransactionsTab() {
 
       setReversalTarget(null);
     }
+  };
+
+  // Helper functions for status display
+  const getStatusBadgeClass = (isSuccess: boolean, isCollected: boolean, isReversed: boolean) => {
+    if (isReversed) {
+      return 'bg-white/40 border-slate-300 text-slate-700';
+    }
+    if (!isSuccess) {
+      return 'bg-rose-50 border-rose-200 text-rose-700';
+    }
+    if (isCollected) {
+      return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+    }
+    return 'bg-amber-50 border-amber-200 text-amber-700';
+  };
+
+  const getStatusText = (isSuccess: boolean, isCollected: boolean, isReversed: boolean) => {
+    if (isReversed) return 'Reversed';
+    if (!isSuccess) return 'Failed';
+    if (isCollected) return 'Collected';
+    return 'Ready';
   };
 
   // Filtered dataset
@@ -353,7 +371,7 @@ export default function TransactionsTab() {
               ) : (
                 filtered.map((tx) => {
                   const isCollected = !!tx.dateCollected;
-                  const isReversed = tx.narrative?.includes("[REVERSED]");
+                  const isReversed = !!(tx.narrative?.includes("[REVERSED]"));
                   const isSuccess = tx.status;
 
                   return (
@@ -402,16 +420,8 @@ export default function TransactionsTab() {
 
                       {/* Status */}
                       <td className="py-3.5 px-5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          isReversed
-                            ? 'bg-white/40 border-slate-300 text-slate-700'
-                            : !isSuccess
-                              ? 'bg-rose-50 border-rose-200 text-rose-700'
-                              : isCollected
-                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                : 'bg-amber-50 border-amber-200 text-amber-700'
-                        }`}>
-                          {isReversed ? 'Reversed' : !isSuccess ? 'Failed' : isCollected ? 'Collected' : 'Ready'}
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadgeClass(isSuccess, isCollected, isReversed)}`}>
+                          {getStatusText(isSuccess, isCollected, isReversed)}
                         </span>
                       </td>
 

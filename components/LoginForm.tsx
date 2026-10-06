@@ -15,7 +15,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
 
@@ -39,7 +39,7 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-[280px] sm:max-w-[300px] lg:max-w-[320px] xl:max-w-[340px] relative z-10">
+    <div className="w-full max-w-70 sm:max-w-75 lg:max-w-80 xl:max-w-85 relative z-10">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
