@@ -1,19 +1,28 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
-  Download,
+  Forward,
+  ChevronDown,
+  FileSpreadsheet,
   CheckCircle2,
   Clock,
   ChevronRight,
   ShieldAlert,
+  AlertTriangle,
+  X,
+  SearchX,
 } from "lucide-react";
-import { transactionsApi, mockReportTransactions } from "@/lib/api";
+import { transactionsApi, reportsApi, mockReportTransactions } from "@/lib/api";
 import type { ReportTransaction, ReversalResponse } from "@/lib/types";
-import TransactionDetailModal from "./TransactionDetailModal";
+import { TransactionFullView } from "./TransactionFullView";
 import { useToast } from "@/components/ui/Toast";
 import { TableSkeleton } from "@/components/ui/LoadingSpinner";
+import { KpiCard, KpiGrid } from "./KpiCard";
+import { Pagination } from "./Pagination";
+import { DateFilterDropdown } from "./DateFilterDropdown";
+import { downloadViaHttp } from "@/lib/csvExport";
 
 export default function TransactionsTab() {
   const { showToast } = useToast();
@@ -21,10 +30,38 @@ export default function TransactionsTab() {
   // Navigation segment: 'all' | 'pending' | 'collected' | 'reversed'
   const [filterType, setFilterType] = useState<'all' | 'pending' | 'collected' | 'reversed'>('all');
   
+  // Date range filter
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [isDateFilterActive, setIsDateFilterActive] = useState<boolean>(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(5);
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+
   // Transactions data
   const [transactions, setTransactions] = useState<ReportTransaction[]>(mockReportTransactions);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Load live transactions on mount
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const data = await reportsApi.getAllTransactions();
+        if (Array.isArray(data) && data.length > 0) {
+          setTransactions(data);
+        }
+      } catch {
+        // Keep fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   // Selected item for drawer/modal
   const [selectedTx, setSelectedTx] = useState<ReportTransaction | null>(null);
@@ -106,45 +143,45 @@ export default function TransactionsTab() {
     }
   };
 
-  // Helper functions for status display
-  const getStatusBadgeClass = (isSuccess: boolean, isCollected: boolean, isReversed: boolean) => {
-    if (isReversed) {
-      return 'bg-white/40 border-slate-300 text-slate-700';
+  // Helper functions for narrative display directly as returned by backend
+  const getNarrativeBadgeClass = (narrative?: string) => {
+    const n = (narrative || '').toUpperCase();
+    if (n.includes('REVERSED')) {
+      return 'bg-slate-100 border-slate-300 text-slate-700';
     }
-    if (!isSuccess) {
-      return 'bg-rose-50 border-rose-200 text-rose-700';
-    }
-    if (isCollected) {
+    if (n.includes('COLLECTED')) {
       return 'bg-emerald-50 border-emerald-200 text-emerald-700';
     }
-    return 'bg-amber-50 border-amber-200 text-amber-700';
+    if (n.includes('AWAITING_COLLECTION')) {
+      return 'bg-slate-50 border-slate-200 text-[#C7510A]';
+    }
+    return 'bg-slate-50 border-slate-200 text-slate-600';
   };
 
-  const getStatusText = (isSuccess: boolean, isCollected: boolean, isReversed: boolean) => {
-    if (isReversed) return 'Reversed';
-    if (!isSuccess) return 'Failed';
-    if (isCollected) return 'Collected';
-    return 'Ready';
-  };
 
-  // Helper function to format CSV status
-  const getCSVStatus = (narrative: string | undefined, dateCollected: string | undefined) => {
-    if (narrative?.includes("[REVERSED]")) return "Reversed";
-    if (dateCollected) return "Collected";
-    return "Pending";
-  };
+  // Reset pagination to page 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, isDateFilterActive, startDate, endDate, searchQuery]);
 
   // Filtered dataset
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return transactions.filter(t => {
-      const isCollected = !!t.dateCollected;
-      const isReversed = t.narrative?.includes("[REVERSED]");
+      const isReversed = !!t.narrative?.toUpperCase().includes("REVERSED");
+      const isCollected = !!t.dateCollected || !!t.narrative?.toUpperCase().includes("COLLECTED");
 
       // Segment pill filter
       if (filterType === 'pending' && (isCollected || isReversed)) return false;
       if (filterType === 'collected' && (!isCollected || isReversed)) return false;
       if (filterType === 'reversed' && !isReversed) return false;
+
+      // Date range filter
+      if (isDateFilterActive && t.dateCreated) {
+        const txDate = t.dateCreated.slice(0, 10);
+        if (startDate && txDate < startDate) return false;
+        if (endDate && txDate > endDate) return false;
+      }
 
       // Text query
       if (q) {
@@ -163,7 +200,13 @@ export default function TransactionsTab() {
 
       return true;
     });
-  }, [transactions, filterType, searchQuery]);
+  }, [transactions, filterType, isDateFilterActive, startDate, endDate, searchQuery]);
+
+  // Paginated records for table view
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   // Clean Metrics matching Reports tab
   const metrics = useMemo(() => {
@@ -174,8 +217,8 @@ export default function TransactionsTab() {
 
     transactions.forEach(t => {
       if (t.currency === 'USD') usd += t.amount;
-      const isCollected = !!t.dateCollected;
-      const isReversed = t.narrative?.includes("[REVERSED]");
+      const isReversed = !!t.narrative?.toUpperCase().includes("REVERSED");
+      const isCollected = !!t.dateCollected || !!t.narrative?.toUpperCase().includes("COLLECTED");
 
       if (isReversed) reversedCount++;
       else if (isCollected) collectedCount++;
@@ -195,32 +238,77 @@ export default function TransactionsTab() {
     };
   }, [transactions]);
 
-  // Clean CSV Export matching Reports tab
-  const handleExportCSV = () => {
-    if (filtered.length === 0) return;
-    const headers = [
-      "Reference", "Date", "Status", "Amount", "Currency", "Fee", "Sender", "Receiver", "Sender Branch", "Payout Branch"
-    ];
-    const rows = filtered.map(t => [
-      `"${t.transactionReference}"`,
-      `"${new Date(t.dateCreated).toLocaleDateString()}"`,
-      getCSVStatus(t.narrative, t.dateCollected),
-      t.amount,
-      `"${t.currency}"`,
-      t.charge || 0,
-      `"${t.senderFirstName} ${t.senderLastName}"`,
-      `"${t.receiverFirstName} ${t.receiverLastName}"`,
-      `"${t.senderBranch || ''}"`,
-      `"${t.receiverBranch || ''}"`
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `eezysend_transactions_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+  // Clean Export matching meaningful names and CSV / XLS formats
+  const handleExport = (format: 'csv' | 'xls') => {
+    setShowExportMenu(false);
+    if (filtered.length === 0) {
+      showToast('No data to export', 'error');
+      return;
+    }
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      downloadViaHttp(filtered, format, `EezySend_Transactions_Report_${today}`, 'transactions');
+      showToast(`Exported ${filtered.length} transactions as ${format.toUpperCase()}`, 'success');
+    } catch (error) {
+      showToast(`Failed to export ${format.toUpperCase()}`, 'error');
+    }
   };
+
+  const reversalModalContent = reversalTarget ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-md bg-white/75 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 space-y-4">
+        <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-100">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+
+        <div>
+          <h3 className="text-base font-bold text-slate-900">
+            Confirm Voucher Reversal
+          </h3>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            You are about to cancel voucher <span className="font-mono font-bold text-slate-800">{reversalTarget.transactionReference}</span>.
+            The voucher amount of <span className="font-bold text-slate-900">{reversalTarget.currency === 'USD' ? '$' : ''}{reversalTarget.amount} {reversalTarget.currency}</span> will be released back to the sender ({reversalTarget.senderFirstName} {reversalTarget.senderLastName}).
+          </p>
+        </div>
+
+        <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>This action is logged in the regulatory audit trail and cannot be undone once processed.</span>
+        </div>
+
+        <div className="flex justify-end gap-2.5 pt-2">
+          <button
+            onClick={() => setReversalTarget(null)}
+            disabled={reversalLoading}
+            className="px-4 py-2 text-xs font-medium rounded-xl text-slate-600 hover:bg-white/40 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirmReversal}
+            disabled={reversalLoading}
+            className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {reversalLoading ? "Processing..." : "Confirm & Reverse"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (selectedTx) {
+    return (
+      <>
+        <TransactionFullView
+          transaction={selectedTx}
+          onBack={() => setSelectedTx(null)}
+          onReverse={(tx) => setReversalTarget(tx)}
+          originTitle="Transactions"
+        />
+        {reversalModalContent}
+      </>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -236,58 +324,84 @@ export default function TransactionsTab() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
-          </button>
-        </div>
-      </div>
+          {/* Export Dropdown with CSV & XLS options */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
+              title="Export transactions as CSV or Excel"
+            >
+              <Forward className="w-3.5 h-3.5" />
+              <span>Export</span>
+              <ChevronDown className="w-3 h-3 opacity-75" />
+            </button>
 
-      {/* 2. Key Metrics: 3 Quiet, high-scannability cards matching ReportsTab */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Total Remittances */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Total Remittance Volume</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            ${metrics.usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            {metrics.total} total vouchers registered
-          </div>
-        </div>
+            {showExportMenu && (
+              <div 
+                className="absolute right-0 top-full mt-1.5 z-30 w-52 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/80 shadow-[0_12px_36px_rgba(10,62,148,0.14)] p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150"
+              >
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Export as CSV</div>
+                    <div className="text-[10px] text-slate-400">Comma-separated (.csv)</div>
+                  </div>
+                </button>
 
-        {/* Ready for Collection (In Escrow) */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Ready for Collection</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            {metrics.pendingCount}{' '}
-            <span className="text-xs font-normal text-slate-400">in escrow</span>
-          </div>
-          <div className="text-xs text-amber-700 mt-1 flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-amber-600" />
-            <span>Awaiting presentation by beneficiaries</span>
-          </div>
-        </div>
-
-        {/* Disbursed & Completed */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Disbursed &amp; Settled</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            {metrics.collectedCount}{' '}
-            <span className="text-xs font-normal text-slate-400">claimed</span>
-          </div>
-          <div className="text-xs text-emerald-700 mt-1 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{metrics.rate}% collection fulfillment rate</span>
+                <button
+                  onClick={() => handleExport('xls')}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-eezysend-blue" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Export as Excel</div>
+                    <div className="text-[10px] text-slate-400">Excel Workbook (.xls)</div>
+                  </div>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 3. Clean, Single-Row Controls Bar matching ReportsTab */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
+      {/* 2. Key Metrics: Shared Responsive Grid & Cards */}
+      <KpiGrid>
+        <KpiCard
+          title="Total Remittance Volume"
+          value={`$${metrics.usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          subtitle={<span className="text-slate-500">{metrics.total} total vouchers registered</span>}
+        />
+
+        <KpiCard
+          title="Ready for Collection"
+          value={metrics.pendingCount}
+          unit="in escrow"
+          subtitle={
+            <div className="text-slate-600 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-500 group-hover:scale-105 transition-transform duration-300" />
+              <span>Awaiting presentation by beneficiaries</span>
+            </div>
+          }
+        />
+
+        <KpiCard
+          title="Disbursed & Settled"
+          value={metrics.collectedCount}
+          unit="claimed"
+          subtitle={
+            <div className="text-emerald-700 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-105 transition-transform duration-300" />
+              <span>{metrics.rate}% collection fulfillment rate</span>
+            </div>
+          }
+        />
+      </KpiGrid>
+
+      {/* 3. Responsive Controls Bar */}
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pt-1">
         {/* Segmented Tabs */}
         <div className="inline-flex p-1 rounded-xl bg-white/40 backdrop-blur-sm border border-slate-200/80 self-start">
           <button
@@ -318,7 +432,7 @@ export default function TransactionsTab() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Collected
+            Collections
           </button>
           <button
             onClick={() => setFilterType('reversed')}
@@ -332,26 +446,52 @@ export default function TransactionsTab() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-72">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* Search & Date Filter */}
+        <div className="flex items-center gap-2.5 flex-1 sm:flex-initial justify-end">
+          <div className="relative flex-1 sm:w-72 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search voucher, T24, name, phone..."
+              placeholder="Search voucher reference, name, phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleDirectSearch()}
-              className="w-full pl-9 pr-3 py-1.5 bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-eezysend-blue transition-colors"
+              className="w-full pl-9 pr-8 py-1.5 bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-eezysend-blue transition-colors"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          <DateFilterDropdown
+            startDate={startDate}
+            endDate={endDate}
+            isActive={isDateFilterActive}
+            onApply={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+              setIsDateFilterActive(true);
+              showToast(start === end ? `Filtered for ${start}` : `Filtered: ${start} → ${end}`, 'info');
+            }}
+            onClear={() => {
+              setIsDateFilterActive(false);
+              showToast('Date filter cleared (All Time)', 'info');
+            }}
+          />
         </div>
       </div>
 
       {/* 4. Clean Table matching ReportsTab structure */}
       <div className="rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="bg-white/50 backdrop-blur-sm text-slate-500 font-semibold border-b border-slate-200/80 uppercase text-[11px] tracking-wider">
               <tr>
                 <th className="py-3.5 px-5">Voucher Reference</th>
@@ -371,21 +511,41 @@ export default function TransactionsTab() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    No transactions found matching this search.
+                  <td colSpan={6} className="py-12 px-4 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-slate-500">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200/80">
+                        <SearchX className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No vouchers found</h3>
+                      <p className="text-xs text-slate-500 mb-4">
+                        {searchQuery
+                          ? `No voucher or reference matches "${searchQuery}".`
+                          : "No records found matching the active filter criteria."}
+                      </p>
+                      {(searchQuery || filterType !== 'all') && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setFilterType('all');
+                          }}
+                          className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-colors shadow-xs"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filtered.map((tx) => {
-                  const isCollected = !!tx.dateCollected;
-                  const isReversed = !!(tx.narrative?.includes("[REVERSED]"));
-                  const isSuccess = tx.status;
+                paginatedRecords.map((tx) => {
+                  const isReversed = !!(tx.narrative?.toUpperCase().includes("REVERSED"));
+                  const isCollected = !!tx.dateCollected || !!(tx.narrative?.toUpperCase().includes("COLLECTED"));
 
                   return (
                     <tr
                       key={tx.transactionReference}
                       onClick={() => setSelectedTx(tx)}
-                      className="hover:bg-white/50 backdrop-blur-sm/70 cursor-pointer transition-colors group"
+                      className="hover:bg-white/50 backdrop-blur-sm cursor-pointer transition-all duration-200 group hover:shadow-sm"
                     >
                       {/* Reference & Date */}
                       <td className="py-3.5 px-5">
@@ -425,10 +585,10 @@ export default function TransactionsTab() {
                         </div>
                       </td>
 
-                      {/* Status */}
+                      {/* Status / Narration */}
                       <td className="py-3.5 px-5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadgeClass(isSuccess, isCollected, isReversed)}`}>
-                          {getStatusText(isSuccess, isCollected, isReversed)}
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getNarrativeBadgeClass(tx.narrative)}`}>
+                          {tx.narrative || (isCollected ? 'COLLECTED' : 'AWAITING_COLLECTION')}
                         </span>
                       </td>
 
@@ -448,14 +608,14 @@ export default function TransactionsTab() {
                           {!isCollected && !isReversed && (
                             <button
                               onClick={() => setReversalTarget(tx)}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-colors"
+                              className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-colors cursor-pointer"
                             >
                               Reverse
                             </button>
                           )}
                           <button
                             onClick={() => setSelectedTx(tx)}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-eezysend-blue transition-colors"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 group-hover:text-eezysend-blue transition-colors"
                           >
                             View
                             <ChevronRight className="w-3.5 h-3.5" />
@@ -472,59 +632,22 @@ export default function TransactionsTab() {
 
         {/* Footer info */}
         <div className="p-4 border-t border-white/30 flex items-center justify-between text-xs text-slate-400 bg-white/40 backdrop-blur-sm">
-          <span>Showing {filtered.length} of {transactions.length} records</span>
+          <span>Total Filtered: {filtered.length} of {transactions.length} records</span>
           <span>Click any transaction to view complete voucher lifecycle or print slip</span>
         </div>
       </div>
 
-      {/* Transaction Detail Modal matching ReportsTab */}
-      <TransactionDetailModal
-        transaction={selectedTx}
-        onClose={() => setSelectedTx(null)}
-        onReverse={(tx) => setReversalTarget(tx)}
+      {/* Pagination Controls */}
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filtered.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
       />
 
       {/* Reversal Confirmation Dialog */}
-      {reversalTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white/75 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 space-y-4">
-            <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-100">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Confirm Voucher Reversal
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                You are about to cancel voucher <span className="font-mono font-bold text-slate-800">{reversalTarget.transactionReference}</span>.
-                The principal amount of <span className="font-bold text-slate-900">{reversalTarget.currency === 'USD' ? '$' : ''}{reversalTarget.amount} {reversalTarget.currency}</span> will be released back to the sender ({reversalTarget.senderFirstName} {reversalTarget.senderLastName}).
-              </p>
-            </div>
-
-            <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-800">
-              ⚠️ This action is logged in the regulatory audit trail and cannot be undone once processed.
-            </div>
-
-            <div className="flex justify-end gap-2.5 pt-2">
-              <button
-                onClick={() => setReversalTarget(null)}
-                disabled={reversalLoading}
-                className="px-4 py-2 text-xs font-medium rounded-xl text-slate-600 hover:bg-white/40 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmReversal}
-                disabled={reversalLoading}
-                className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {reversalLoading ? "Processing..." : "Confirm & Reverse"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {reversalModalContent}
     </div>
   );
 }

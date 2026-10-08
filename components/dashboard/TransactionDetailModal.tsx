@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { ReportTransaction } from "@/lib/types";
+import VoucherPrintSlip from "./VoucherPrintSlip";
 
 interface TransactionDetailModalProps {
   readonly transaction: ReportTransaction | null;
@@ -38,50 +39,65 @@ export default function TransactionDetailModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isCollected = !!transaction.dateCollected;
-  const isSuccess = transaction.status;
+  const handlePrint = () => {
+    const originalTitle = document.title;
+    document.title = `EezySend_Voucher_${transaction.transactionReference || 'Slip'}`;
+    window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1500);
+  };
+
+  const isReversed = !!transaction.narrative?.toUpperCase().includes('REVERSED');
+  const isCollected = !!transaction.dateCollected || !!transaction.narrative?.toUpperCase().includes('COLLECTED');
 
   // Helper functions to avoid nested ternaries
   const getStatusBgClass = () => {
-    if (!isSuccess) return 'bg-rose-50 text-rose-600';
+    if (isReversed) return 'bg-slate-100 text-slate-700';
     if (isCollected) return 'bg-emerald-50 text-emerald-600';
-    return 'bg-eezysend-blue-light text-eezysend-blue';
+    return 'bg-amber-50 text-amber-600';
   };
 
   const getStatusIcon = () => {
-    if (!isSuccess) return <AlertCircle className="w-5 h-5" />;
-    if (isCollected) return <CheckCircle2 className="w-5 h-5" />;
-    return <Clock className="w-5 h-5" />;
+    if (isReversed) return <RotateCcw className="w-5 h-5 text-slate-600" />;
+    if (isCollected) return <CheckCircle2 className="w-5 h-5 text-emerald-600" />;
+    return <Clock className="w-5 h-5 text-amber-600" />;
   };
 
   const getStatusBadgeClass = () => {
-    if (!isSuccess) return 'bg-rose-50 border-rose-200 text-rose-700';
+    if (isReversed) return 'bg-slate-100 border-slate-300 text-slate-700';
     if (isCollected) return 'bg-emerald-50 border-emerald-200 text-emerald-700';
-    return 'bg-amber-50 border-amber-200 text-amber-700';
+    return 'bg-slate-50 border-slate-200 text-[#C7510A]';
   };
 
   const getStatusText = () => {
-    if (!isSuccess) return 'Failed';
-    if (isCollected) return 'Collected';
-    return 'Pending Collection';
+    return transaction.narrative || (isCollected ? 'COLLECTED' : 'AWAITING_COLLECTION');
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
-      onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transaction-detail-title"
-        className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-3xl text-slate-800"
-        onClick={(e) => e.stopPropagation()}
+    <>
+      {/* 1. Printable Official Voucher Document */}
+      <div className="hidden print:block">
+        <VoucherPrintSlip transaction={transaction} />
+      </div>
+
+      {/* 2. Interactive Modal */}
+      <div 
+        className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={onClose}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+        role="presentation"
       >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="transaction-detail-title"
+          className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-3xl text-slate-800"
+          onClick={(e) => e.stopPropagation()}
+        >
+
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between p-6 bg-white/95 backdrop-blur-md border-b border-white/30">
+        <div className="sticky top-0 z-10 flex items-center justify-between p-6 bg-white/95 backdrop-blur-md border-b border-white/30 print:border-b print:bg-white print:static">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getStatusBgClass()}`}>
               {getStatusIcon()}
@@ -93,7 +109,7 @@ export default function TransactionDetailModal({
                 </h2>
                 <button
                   onClick={() => handleCopy(transaction.transactionReference)}
-                  className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                  className="no-print p-1 text-slate-400 hover:text-slate-700 transition-colors"
                   title="Copy Reference"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -112,7 +128,7 @@ export default function TransactionDetailModal({
 
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-white/40 rounded-lg transition-colors"
+              className="no-print p-1.5 text-slate-400 hover:text-slate-700 hover:bg-white/40 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -126,7 +142,7 @@ export default function TransactionDetailModal({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Remittance Amount
+                  Amount
                 </span>
                 <div className="text-3xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
                   {transaction.currency === 'USD' ? '$' : ''}{transaction.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}{' '}
@@ -136,13 +152,13 @@ export default function TransactionDetailModal({
 
               <div className="flex flex-wrap gap-4 sm:text-right text-xs">
                 <div>
-                  <span className="text-slate-500 block">Service Charge</span>
+                  <span className="text-slate-500 block">Charge</span>
                   <span className="text-sm font-semibold text-slate-800">
                     {transaction.currency} {typeof transaction.charge === 'number' ? transaction.charge.toFixed(2) : (transaction.charge || '0.00')}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Tax / IMTT</span>
+                  <span className="text-slate-500 block">Tax</span>
                   <span className="text-sm font-semibold text-slate-800">
                     {transaction.currency} {(transaction.tax || 0).toFixed(2)}
                   </span>
@@ -239,11 +255,11 @@ export default function TransactionDetailModal({
 
                 <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 gap-2">
                   <div>
-                    <span className="text-slate-400 block text-[11px]">Payout Branch</span>
+                    <span className="text-slate-400 block text-[11px]">Receiver Branch</span>
                     <p className="text-slate-700 font-medium">{transaction.receiverBranch || 'Pending'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[11px]">Payout Teller</span>
+                    <span className="text-slate-400 block text-[11px]">Receiver Teller</span>
                     <p className="font-mono text-slate-600">{transaction.receiverTeller || 'Pending'}</p>
                   </div>
                 </div>
@@ -255,7 +271,7 @@ export default function TransactionDetailModal({
           <div className="p-4 rounded-2xl bg-white/50 backdrop-blur-sm border border-slate-200/70 space-y-2">
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-eezysend-blue" />
-              Regulatory Audit Trail
+              Audit Trail
             </h4>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
@@ -275,7 +291,7 @@ export default function TransactionDetailModal({
 
               <div className="p-2.5 rounded-xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
                 <span className="text-slate-400 block text-[10px]">Reported</span>
-                <span className={`font-semibold ${transaction.reported ? 'text-emerald-700' : 'text-amber-700'}`}>
+                <span className={`font-semibold ${transaction.reported ? 'text-emerald-700' : 'text-[#C7510A]'}`}>
                   {transaction.reported ? 'Yes' : 'Pending'}
                 </span>
               </div>
@@ -291,25 +307,25 @@ export default function TransactionDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 bg-white/50 backdrop-blur-sm border-t border-white/30 rounded-b-3xl">
+        <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 bg-white/50 backdrop-blur-sm border-t border-white/30 rounded-b-3xl">
           <p className="text-xs text-slate-400">
             EezySend Financial Operations &middot; Audit View
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-white/40 rounded-xl transition-colors border border-slate-200 shadow-sm"
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-white/40 rounded-xl transition-colors border border-slate-200 shadow-sm cursor-pointer"
               title="Print official teller slip"
             >
               <Printer className="w-3.5 h-3.5 text-slate-500" />
               <span>Print Slip</span>
             </button>
-            {onReverse && !isCollected && !transaction.narrative?.includes("[REVERSED]") && (
+            {onReverse && !isCollected && !isReversed && (
               <button
                 onClick={() => onReverse(transaction)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition-colors shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl transition-colors shadow-2xs"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
                 <span>Reverse Voucher</span>
               </button>
             )}
@@ -323,5 +339,6 @@ export default function TransactionDetailModal({
         </div>
       </div>
     </div>
-  );
+  </>
+);
 }
