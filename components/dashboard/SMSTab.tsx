@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
-  Download,
+  Forward,
   CheckCircle2,
   Clock,
   AlertCircle,
@@ -13,15 +13,21 @@ import {
   Phone,
   X,
   ChevronRight,
-  Sparkles,
   Smartphone,
   Check,
   Copy,
+  RefreshCw,
+  SearchX,
 } from "lucide-react";
-import { smsApi, mockSMSList, mockReportTransactions } from "@/lib/api";
+import { smsApi, transactionsApi, mockSMSList, mockReportTransactions } from "@/lib/api";
 import type { SMSModel, ReportTransaction } from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
 import { TableSkeleton } from "@/components/ui/LoadingSpinner";
+import { downloadViaHttp } from "@/lib/csvExport";
+import { KpiCard, KpiGrid } from "./KpiCard";
+import { Pagination } from "./Pagination";
+import { DateFilterDropdown } from "./DateFilterDropdown";
+import { SMSFullView } from "./SMSFullView";
 
 export default function SMSTab() {
   const { showToast } = useToast();
@@ -29,10 +35,37 @@ export default function SMSTab() {
   // Navigation segment: 'all' | 'delivered' | 'failed'
   const [filterType, setFilterType] = useState<'all' | 'delivered' | 'failed'>('all');
   
+  // Date range filter
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [isDateFilterActive, setIsDateFilterActive] = useState<boolean>(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(5);
+
   // Data state
   const [smsList, setSmsList] = useState<SMSModel[]>(mockSMSList);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Load live SMS logs on mount
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const pageData = await smsApi.getAllSMS(0, 2500);
+        if (pageData && Array.isArray(pageData.content) && pageData.content.length > 0) {
+          setSmsList(pageData.content);
+        }
+      } catch {
+        // Keep fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
   
   // Resend action loading map (keyed by transactionReference)
   const [resendingMap, setResendingMap] = useState<Record<string, boolean>>({});
@@ -53,6 +86,32 @@ export default function SMSTab() {
   const linkedTx = useMemo<ReportTransaction | undefined>(() => {
     if (!selectedSMS) return undefined;
     return mockReportTransactions.find(t => t.transactionReference === selectedSMS.transactionReference);
+  }, [selectedSMS]);
+
+  const [liveLinkedTx, setLiveLinkedTx] = useState<ReportTransaction | null>(null);
+
+  useEffect(() => {
+    if (!selectedSMS) {
+      setLiveLinkedTx(null);
+      return;
+    }
+    const mock = mockReportTransactions.find(t => t.transactionReference === selectedSMS.transactionReference);
+    if (mock) {
+      setLiveLinkedTx(mock);
+      return;
+    }
+    let isCancelled = false;
+    transactionsApi.getByReference(selectedSMS.transactionReference)
+      .then(tx => {
+        if (!isCancelled && tx?.transactionReference) {
+          setLiveLinkedTx(tx);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedSMS]);
 
   // Handle Resend SMS
@@ -116,6 +175,11 @@ export default function SMSTab() {
     }
   };
 
+  // Reset pagination to page 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, isDateFilterActive, startDate, endDate, searchQuery]);
+
   // Filtered dataset
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -124,6 +188,13 @@ export default function SMSTab() {
       
       if (filterType === 'delivered' && !bothDelivered) return false;
       if (filterType === 'failed' && bothDelivered) return false;
+
+      // Date range filter
+      if (isDateFilterActive && item.dateCreated) {
+        const itemDate = item.dateCreated.slice(0, 10);
+        if (startDate && itemDate < startDate) return false;
+        if (endDate && itemDate > endDate) return false;
+      }
 
       if (q) {
         const ref = item.transactionReference.toLowerCase();
@@ -136,7 +207,13 @@ export default function SMSTab() {
 
       return true;
     });
-  }, [smsList, filterType, searchQuery]);
+  }, [smsList, filterType, isDateFilterActive, startDate, endDate, searchQuery]);
+
+  // Paginated records for table view
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   // Metrics matching ReportsTab and TransactionsTab
   const metrics = useMemo(() => {
@@ -176,14 +253,22 @@ export default function SMSTab() {
       `"${s.receiverPhone}"`,
       s.receiverStatus ? "Delivered" : "Failed"
     ]);
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `eezysend_sms_logs_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+    const today = new Date().toISOString().split('T')[0];
+    downloadViaHttp(filtered, 'csv', `EezySend_SMS_Delivery_Report_${today}`, 'sms');
+    showToast(`Exported ${filtered.length} SMS logs to CSV`, 'success');
   };
+
+  if (selectedSMS) {
+    return (
+      <SMSFullView
+        sms={selectedSMS}
+        linkedTx={liveLinkedTx || linkedTx}
+        onBack={() => setSelectedSMS(null)}
+        onResend={(txRef) => handleResend(txRef)}
+        isResending={!!resendingMap[selectedSMS.transactionReference]}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -203,55 +288,48 @@ export default function SMSTab() {
             onClick={handleExportCSV}
             className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Forward className="w-3.5 h-3.5" />
             <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      {/* 2. Key Metrics: 3 Quiet, high-scannability cards matching ReportsTab */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Total SMS Dispatched */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Total SMS Dispatched</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            {metrics.total * 2}{' '}
-            <span className="text-xs font-normal text-slate-400">alerts ({metrics.total} vouchers)</span>
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Sender confirmation &amp; beneficiary notifications
-          </div>
-        </div>
+      {/* 2. Key Metrics: Shared Responsive Grid & Cards */}
+      <KpiGrid>
+        <KpiCard
+          title="Total SMS Dispatched"
+          value={metrics.total * 2}
+          unit={`alerts (${metrics.total} vouchers)`}
+          subtitle={<span className="text-slate-500">Sender confirmation & beneficiary notifications</span>}
+        />
 
-        {/* Delivered Successfully */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Delivered Successfully</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            {metrics.deliveredCount}{' '}
-            <span className="text-xs font-normal text-slate-400">vouchers complete</span>
-          </div>
-          <div className="text-xs text-emerald-700 mt-1 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{metrics.rate}% network delivery confirmation rate</span>
-          </div>
-        </div>
+        <KpiCard
+          title="Delivered Successfully"
+          value={metrics.deliveredCount}
+          unit="vouchers complete"
+          subtitle={
+            <div className="text-emerald-700 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-105 transition-transform duration-300" />
+              <span>{metrics.rate}% network delivery confirmation rate</span>
+            </div>
+          }
+        />
 
-        {/* Delivery Exceptions */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Delivery Exceptions / In Queue</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            {metrics.exceptionCount}{' '}
-            <span className="text-xs font-normal text-slate-400">flagged</span>
-          </div>
-          <div className="text-xs text-amber-700 mt-1 flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-amber-600" />
-            <span>Eligible for instant 1-click re-dispatch</span>
-          </div>
-        </div>
-      </div>
+        <KpiCard
+          title="Delivery Exceptions / In Queue"
+          value={metrics.exceptionCount}
+          unit="flagged"
+          subtitle={
+            <div className="text-slate-600 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-500 group-hover:scale-105 transition-transform duration-300" />
+              <span>Eligible for instant 1-click re-dispatch</span>
+            </div>
+          }
+        />
+      </KpiGrid>
 
-      {/* 3. Clean, Single-Row Controls Bar matching ReportsTab */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
+      {/* 3. Responsive Controls Bar */}
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pt-1">
         {/* Segmented Tabs */}
         <div className="inline-flex p-1 rounded-xl bg-white/40 backdrop-blur-sm border border-slate-200/80 self-start">
           <button
@@ -286,26 +364,52 @@ export default function SMSTab() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-72">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* Search & Date Filter */}
+        <div className="flex items-center gap-2.5 flex-1 sm:flex-initial justify-end">
+          <div className="relative flex-1 sm:w-72 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search voucher ref or phone (+263...)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleDirectSearch()}
-              className="w-full pl-9 pr-3 py-1.5 bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-eezysend-blue transition-colors"
+              className="w-full pl-9 pr-8 py-1.5 bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-eezysend-blue transition-colors"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          <DateFilterDropdown
+            startDate={startDate}
+            endDate={endDate}
+            isActive={isDateFilterActive}
+            onApply={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+              setIsDateFilterActive(true);
+              showToast(start === end ? `Filtered for ${start}` : `Filtered: ${start} → ${end}`, 'info');
+            }}
+            onClear={() => {
+              setIsDateFilterActive(false);
+              showToast('Date filter cleared (All Time)', 'info');
+            }}
+          />
         </div>
       </div>
 
       {/* 4. Clean Table matching ReportsTab structure */}
       <div className="rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="bg-white/50 backdrop-blur-sm text-slate-500 font-semibold border-b border-slate-200/80 uppercase text-[11px] tracking-wider">
               <tr>
                 <th className="py-3.5 px-5">Voucher Reference</th>
@@ -324,12 +428,33 @@ export default function SMSTab() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
-                    No SMS transmission records found for this filter.
+                  <td colSpan={5} className="py-12 px-4 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-slate-500">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200/80">
+                        <SearchX className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No dispatch records found</h3>
+                      <p className="text-xs text-slate-500 mb-4">
+                        {searchQuery
+                          ? `No SMS transmission logs match "${searchQuery}".`
+                          : "No records found matching the active filters."}
+                      </p>
+                      {(searchQuery || filterType !== 'all') && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setFilterType('all');
+                          }}
+                          className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-colors shadow-xs"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filtered.map((item) => {
+                paginatedRecords.map((item) => {
                   const bothDelivered = item.senderStatus && item.receiverStatus;
                   const partial = (item.senderStatus && !item.receiverStatus) || (!item.senderStatus && item.receiverStatus);
                   const isResending = !!resendingMap[item.transactionReference];
@@ -338,7 +463,7 @@ export default function SMSTab() {
                     <tr
                       key={item.transactionReference}
                       onClick={() => setSelectedSMS(item)}
-                      className="hover:bg-white/50 backdrop-blur-sm/70 cursor-pointer transition-colors group"
+                      className="hover:bg-white/50 backdrop-blur-sm cursor-pointer transition-all duration-200 group hover:shadow-sm"
                     >
                       {/* Reference & Date */}
                       <td className="py-3.5 px-5">
@@ -378,7 +503,7 @@ export default function SMSTab() {
                           bothDelivered
                             ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                             : partial
-                              ? 'bg-amber-50 border-amber-200 text-amber-700'
+                              ? 'bg-slate-50 border-slate-200 text-[#C7510A]'
                               : 'bg-rose-50 border-rose-200 text-rose-700'
                         }`}>
                           {bothDelivered ? 'Delivered' : partial ? 'Partial' : 'Failed'}
@@ -398,7 +523,11 @@ export default function SMSTab() {
                             }`}
                             title="Re-dispatch collection SMS"
                           >
-                            <Send className={`w-3 h-3 ${isResending ? 'animate-spin' : ''}`} />
+                            {isResending ? (
+                              <RefreshCw className="w-3 h-3 animate-spin text-eezysend-blue" />
+                            ) : (
+                              <Send className="w-3 h-3" />
+                            )}
                             <span>{isResending ? 'Sending...' : 'Resend'}</span>
                           </button>
 
@@ -421,129 +550,19 @@ export default function SMSTab() {
 
         {/* Footer info */}
         <div className="p-4 border-t border-white/30 flex items-center justify-between text-xs text-slate-400 bg-white/40 backdrop-blur-sm">
-          <span>Showing {filtered.length} of {smsList.length} dispatch logs</span>
+          <span>Total Filtered: {filtered.length} of {smsList.length} dispatch logs</span>
           <span>Click any row to preview message text and gateway receipt</span>
         </div>
       </div>
 
-      {/* 5. SMS Message Preview & Delivery Receipt Modal */}
-      {selectedSMS && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-white/75 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 space-y-4 text-slate-800">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/30">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-eezysend-blue-light text-eezysend-blue flex items-center justify-center">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">SMS Gateway Dispatch</h3>
-                  <p className="text-xs text-slate-400 font-mono">
-                    Voucher {selectedSMS.transactionReference}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedSMS(null)}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Simulated SMS Message Preview Bubbles */}
-            <div className="space-y-3">
-              {/* Beneficiary SMS Bubble */}
-              <div className="p-4 rounded-2xl bg-white/50 backdrop-blur-sm border border-slate-200/80 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <MessageSquare className="w-3.5 h-3.5 text-eezysend-blue" />
-                    Beneficiary Collection Alert
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    selectedSMS.receiverStatus
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      : 'bg-rose-50 border-rose-200 text-rose-700'
-                  }`}>
-                    {selectedSMS.receiverStatus ? 'Delivered' : 'Delivery Failed'}
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]/70 text-xs text-slate-800 font-mono leading-relaxed shadow-2xs">
-                  "CABS EezySend: You have received {linkedTx ? `${linkedTx.currency === 'USD' ? '$' : ''}${linkedTx.amount} ${linkedTx.currency}` : 'funds'} from {linkedTx ? `${linkedTx.senderFirstName} ${linkedTx.senderLastName}` : 'Sender'}. Collection Code: {selectedSMS.transactionReference}. Present your National ID at any CABS Branch to collect."
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>To: <strong className="font-mono text-slate-700">{selectedSMS.receiverPhone}</strong></span>
-                  <button
-                    onClick={() => handleCopy(selectedSMS.receiverPhone)}
-                    className="text-eezysend-blue hover:underline"
-                  >
-                    {copiedText === selectedSMS.receiverPhone ? 'Copied' : 'Copy Phone'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Sender SMS Bubble */}
-              <div className="p-4 rounded-2xl bg-white/50 backdrop-blur-sm border border-slate-200/80 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
-                    Sender Confirmation Receipt
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                    selectedSMS.senderStatus
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      : 'bg-rose-50 border-rose-200 text-rose-700'
-                  }`}>
-                    {selectedSMS.senderStatus ? 'Delivered' : 'Delivery Failed'}
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]/70 text-xs text-slate-800 font-mono leading-relaxed shadow-2xs">
-                  "CABS EezySend: Remittance created successfully. Voucher {selectedSMS.transactionReference} issued to {linkedTx ? `${linkedTx.receiverFirstName} ${linkedTx.receiverLastName}` : 'Recipient'}. Funds reserved safely."
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>To: <strong className="font-mono text-slate-700">{selectedSMS.senderPhone}</strong></span>
-                  <button
-                    onClick={() => handleCopy(selectedSMS.senderPhone)}
-                    className="text-eezysend-blue hover:underline"
-                  >
-                    {copiedText === selectedSMS.senderPhone ? 'Copied' : 'Copy Phone'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-white/30">
-              <span className="text-[11px] text-slate-400">
-                Logged {new Date(selectedSMS.dateCreated).toLocaleString()}
-              </span>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedSMS(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-white/40 rounded-xl transition-colors border border-slate-200 shadow-sm"
-                >
-                  Close
-                </button>
-
-                <button
-                  onClick={() => handleResend(selectedSMS.transactionReference)}
-                  disabled={resendingMap[selectedSMS.transactionReference]}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-eezysend-blue hover:bg-eezysend-blue-hover rounded-xl transition-colors shadow-sm disabled:opacity-50"
-                >
-                  <Send className={`w-3.5 h-3.5 ${resendingMap[selectedSMS.transactionReference] ? 'animate-spin' : ''}`} />
-                  <span>{resendingMap[selectedSMS.transactionReference] ? 'Sending...' : 'Resend Alerts'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Pagination Controls */}
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filtered.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }
