@@ -24,6 +24,11 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env.local.example
+.env*
+
+# swagger api
+swagger-api/
 
 # vercel
 .vercel
@@ -31,3 +36,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# mcp & ide
+.playwright-mcp/
+.kiro/
+
