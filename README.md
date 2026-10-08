@@ -1,17 +1,136 @@
-# EezySend Frontend
+# EezySend - Financial Remittance Operations Dashboard
 
-A modern, secure, and beautiful frontend for the EezySend document transfer platform built with Next.js 15, React 19, TypeScript, and Tailwind CSS.
+A premium, secure financial remittance management system for CABS (Central African Building Society) and other financial institutions. Built with Next.js 15, React 19, TypeScript, and Tailwind CSS v4.
+
+## 💼 What is EezySend?
+
+**EezySend** is a **Local Remittance Operations Portal** that enables financial institutions to:
+
+- **Process domestic money transfers** between customers and branches
+- **Monitor transaction status** (pending, collected, failed)
+- **Track SMS notifications** sent to beneficiaries
+- **Monitor system health** of the remittance infrastructure
+- **Generate settlement reports** for audit and compliance
+- **Manage counter collections** at physical branches
+
+### Use Case Example
+When Tendai in Harare sends $350 to Chipo in Bulawayo:
+1. Teller creates the remittance voucher in the system
+2. EezySend generates a unique reference (e.g., `EZS-20261005-0981`)
+3. System sends SMS notification to beneficiary with pickup details
+4. Beneficiary collects cash at designated CABS branch
+5. System tracks collection, fees (IMTT taxes), and settlement
+
+---
+
+## 📊 Dashboard Tabs Explained
+
+### 1. 📈 **Reports & Settlements** (Default Tab)
+
+**Purpose**: Financial overview, audit trail, and end-of-day settlement processing
+
+**What You See**:
+- **Total Remittance Volume**: Sum of all money transfers (USD currency settled)
+- **Total Transactions**: Count of vouchers with success rate (collected vs total)
+- **Fees & Taxes Collected**: Service charges and IMTT (Intermediated Money Transfer Tax)
+- **Transaction Table**: Complete list of all remittances with:
+  - Voucher reference number
+  - Sender name and branch
+  - Beneficiary name and city
+  - Amount and currency
+  - Status (Collected, Pending, Failed)
+  - Quick view button for details
+
+**Key Actions**:
+- 🔄 **Run Settlement**: Triggers end-of-day reconciliation process
+- 📥 **Export CSV**: Download transaction data for accounting/audit
+- 🔍 **Search & Filter**: Find specific transactions by reference, name, or phone
+- 📅 **Date Filter**: View transactions within a specific date range
+
+**Who Uses It**: Branch managers, finance officers, auditors
+
+---
+
+### 2. 💸 **Transactions** 
+
+**Purpose**: Real-time transaction management and voucher operations
+
+**What You See**:
+- **Total Remittance Volume**: Live tally of money in transit
+- **Ready for Collection**: Amount held in escrow waiting for beneficiary pickup
+- **Disbursed & Settled**: Successfully completed transactions
+- **Transaction Lookup**: Search by voucher reference or phone number
+- **Voucher Status Tracking**: Monitor individual transaction progress
+- **T24 Integration Status**: Connection to core banking system
+
+**Key Actions**:
+- 🔍 **Direct Search**: Instant lookup by voucher reference or phone
+- 📄 **View Transaction Details**: Complete remittance information modal
+- ↩️ **Transaction Reversals**: Cancel/reverse failed transactions (if authorized)
+- 🔔 **Resend SMS**: Re-notify beneficiary if message wasn't received
+
+**Who Uses It**: Tellers, customer service officers, operations team
+
+---
+
+### 3. 📱 **SMS Center**
+
+**Purpose**: Communication gateway monitoring and SMS delivery tracking
+
+**What You See**:
+- **Total SMS Dispatched**: Count of all messages sent to beneficiaries
+- **Delivered Successfully**: Messages confirmed delivered by SMS gateway
+- **Delivery Exceptions**: Failed/queued messages requiring attention
+- **SMS Log Table**: Complete audit trail with:
+  - Recipient phone number
+  - Message type (Voucher Ready, Collection Confirmed, etc.)
+  - Delivery timestamp
+  - Gateway status (Delivered, Pending, Failed)
+  - Cost per message
+
+**Key Actions**:
+- 🔍 **Search by Phone**: Find all messages sent to specific number
+- 🔄 **Retry Failed Messages**: Resend messages that didn't deliver
+- 📊 **Gateway Health**: Monitor SMS provider connectivity
+- 💰 **Cost Tracking**: View SMS charges for billing
+
+**Who Uses It**: Operations officers, IT support, customer care
+
+---
+
+### 4. 🏥 **System Health**
+
+**Purpose**: Real-time infrastructure monitoring and API health checks
+
+**What You See**:
+- **Core Remit Service**: Main application status (UP/DOWN)
+- **API Response Latency**: System performance in milliseconds
+- **Service Availability**: Uptime percentage and SLA compliance
+- **Subsystems Table**: Status of all integrated services:
+  - **NLB (Network Load Balancer)**: Traffic distribution
+  - **T24 Core Banking**: Account verification and settlement
+  - **SMS Gateway**: Message delivery infrastructure
+  - **Remit API**: Main remittance processing service
+  - **Database & Storage**: PostgreSQL/MySQL connectivity
+
+**Key Actions**:
+- 🔄 **Ping System Now**: Live health check of all services
+- 🔍 **Search Subsystems**: Filter by service name or category
+- 📋 **View /health Endpoint**: See raw JSON health check response
+- 📊 **Infrastructure/Integrations Filter**: Group services by type
+
+**Who Uses It**: DevOps engineers, system administrators, IT support
+
+---
 
 ## 🎨 Design Features
 
-- **Single Viewport Hero + Login**: Clean, modern design combining hero section and authentication in one view
-- **Glassmorphism UI**: Modern glass-effect design elements with backdrop blur
-- **Responsive Layout**: Fully responsive design that works on all devices
-- **Animated Elements**: Smooth transitions and subtle animations for better UX
-- **Brand Colors**: Custom color scheme matching EezySend brand identity
-  - Blue: `#1e3a8a` (Primary)
-  - Green: `#16a34a` (Secondary)
-  - Lime: `#84cc16` (Accent)
+- **Premium Glassy UI**: Transparent cards with backdrop blur for modern aesthetic
+- **Blue Sidebar Design**: `#0A3E94` brand color with white active states
+- **White Logo**: High-resolution vector logo optimized for dark backgrounds
+- **Micro-interactions**: Smooth transitions, hover effects, scale animations
+- **Responsive Layout**: Works on desktop, tablet, and mobile devices
+- **Tailwind v4**: Modern CSS with theme-based color system
 
 ## 🚀 Getting Started
 

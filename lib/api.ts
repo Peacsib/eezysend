@@ -36,19 +36,28 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     const config: RequestInit = {
       ...options,
       headers,
+      signal: options.signal || controller.signal,
     };
 
-    const response = await fetch(url, config);
-    
-    if (!response.ok) {
-      // Throw clean error without logging to console.error to avoid Next.js Turbopack dev error popups
-      throw new Error(`HTTP error! status: ${response.status}`);
+    try {
+      const response = await fetch(url, config);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
-    
-    return await response.json();
   }
 
   async get<T>(endpoint: string, token?: string): Promise<T> {
@@ -95,14 +104,53 @@ export const hasLiveAuthToken = (): boolean => {
   }
 };
 
+// Auto-retrieve and cache live token from .env.local via Next.js internal API route
+export const ensureLiveToken = async (): Promise<string | null> => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const existing = localStorage.getItem('auth_token') || '';
+    if (existing && !existing.startsWith('temp_token_') && existing.length > 20) {
+      return existing;
+    }
+    const res = await fetch('/api/auth/token');
+    const data = await res.json();
+    if (data?.accessToken) {
+      localStorage.setItem('auth_token', data.accessToken);
+      if (data.key) localStorage.setItem('eezysend_username', data.key);
+      return data.accessToken;
+    }
+  } catch (err) {
+    console.warn('Could not auto-fetch live token:', err);
+  }
+  return null;
+};
+
 // Auth API
 export const authApi = {
+  authorize: async (key?: string, secret?: string) => {
+    if (!key && !secret) {
+      const res = await fetch('/api/auth/token');
+      return await res.json();
+    }
+    return api.post('/security/authorize', { key, secret });
+  },
+
   login: async (username: string, password: string) => {
     return api.post('/api/auth/login', { username, password });
   },
   
-  logout: async (token: string) => {
-    return api.post('/api/auth/logout', {}, token);
+  logout: async (token?: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('eezysend_username');
+    }
+    if (token) {
+      try {
+        await api.post('/api/auth/logout', {}, token);
+      } catch {
+        // Ignored
+      }
+    }
   },
 };
 
@@ -138,11 +186,15 @@ import type { ReportTransaction, ReportDateParams } from './types';
 export const reportsApi = {
   // GET /report/alltransactions/
   getAllTransactions: async (token?: string): Promise<ReportTransaction[]> => {
-    if (!token && !hasLiveAuthToken()) {
+    let activeToken = token;
+    if (!activeToken && !hasLiveAuthToken()) {
+      activeToken = (await ensureLiveToken()) || undefined;
+    }
+    if (!activeToken && !hasLiveAuthToken()) {
       return mockReportTransactions;
     }
     try {
-      const data = await api.get<ReportTransaction[]>('/report/alltransactions/', token);
+      const data = await api.get<ReportTransaction[]>('/report/alltransactions/', activeToken);
       if (Array.isArray(data) && data.length > 0) return data;
       return mockReportTransactions;
     } catch {
@@ -458,12 +510,12 @@ export const mockReportTransactions: ReportTransaction[] = [
     dateCollected: "2026-10-05T12:05:22.000Z",
     status: true,
     transactionType: "REMITTANCE",
-    currency: "ZiG",
-    amount: 4500.0,
-    charge: "90.00",
-    tax: 9.00,
+    currency: "USD",
+    amount: 450.0,
+    charge: "9.00",
+    tax: 0.90,
     channel: "BRANCH_TELLER",
-    narrative: "Local ZiG urgent transfer",
+    narrative: "Tuition and school stationery transfer",
     reported: true,
     withdrawalReported: true,
     withdrawalReference: "WTH-20261005-4416",
@@ -494,9 +546,13 @@ import type { SMSModel, PageSMSModel } from './types';
 export const smsApi = {
   // GET /sms-api/get-all-sms?page={page}&size={size}
   getAllSMS: async (page = 0, size = 20, token?: string): Promise<PageSMSModel> => {
-    if (token || hasLiveAuthToken()) {
+    let activeToken = token;
+    if (!activeToken && !hasLiveAuthToken()) {
+      activeToken = (await ensureLiveToken()) || undefined;
+    }
+    if (activeToken || hasLiveAuthToken()) {
       try {
-        return await api.get<PageSMSModel>(`/sms-api/get-all-sms?page=${page}&size=${size}`, token);
+        return await api.get<PageSMSModel>(`/sms-api/get-all-sms?page=${page}&size=${size}`, activeToken);
       } catch {
         // Fallback to local mock
       }

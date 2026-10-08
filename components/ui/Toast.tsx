@@ -47,11 +47,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       
       {/* Toast Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 flex flex-col gap-3 pointer-events-none items-end">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto min-w-[320px] max-w-md bg-white/95 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_32px_rgba(10,62,148,0.15)] p-4 flex items-start gap-3 animate-in slide-in-from-bottom-5 duration-300"
+            className="pointer-events-auto w-full sm:w-auto sm:min-w-[320px] max-w-md bg-white/95 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_32px_rgba(10,62,148,0.15)] p-4 flex items-start gap-3 animate-in slide-in-from-bottom-5 duration-300"
           >
             {/* Icon */}
             <div className="shrink-0">
