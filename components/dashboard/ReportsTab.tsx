@@ -3,17 +3,25 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
-  Download,
+  Forward,
+  ChevronDown,
+  FileSpreadsheet,
   Calendar,
-  Sparkles,
   ChevronRight,
   CheckCircle2,
+  X,
+  SearchX,
+  Play,
 } from "lucide-react";
 import { reportsApi, mockReportTransactions } from "@/lib/api";
 import type { ReportTransaction } from "@/lib/types";
-import TransactionDetailModal from "./TransactionDetailModal";
+import { TransactionFullView } from "./TransactionFullView";
 import { useToast } from "@/components/ui/Toast";
 import { LoadingSpinner, TableSkeleton } from "@/components/ui/LoadingSpinner";
+import { KpiCard, KpiGrid } from "./KpiCard";
+import { Pagination } from "./Pagination";
+import { DateFilterDropdown } from "./DateFilterDropdown";
+import { downloadViaHttp } from "@/lib/csvExport";
 
 export default function ReportsTab() {
   const { showToast } = useToast();
@@ -23,14 +31,17 @@ export default function ReportsTab() {
   
   // Date range
   const [startDate, setStartDate] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
+    return new Date().toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
   });
-  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [isDateFilterActive, setIsDateFilterActive] = useState<boolean>(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(5);
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
   // Data & loading
   const [transactions, setTransactions] = useState<ReportTransaction[]>(mockReportTransactions);
@@ -44,24 +55,14 @@ export default function ReportsTab() {
   const loadData = async () => {
     setLoading(true);
     try {
-      let data: ReportTransaction[] = [];
-      if (filterType === 'all') {
-        data = await reportsApi.getAllTransactions();
-      } else if (filterType === 'deposits') {
-        data = await reportsApi.getDeposits({ startDate, endDate });
-      } else if (filterType === 'withdrawals') {
-        data = await reportsApi.getWithdrawals({ startDate, endDate });
-      }
-
+      const data = await reportsApi.getAllTransactions();
       if (Array.isArray(data) && data.length > 0) {
         setTransactions(data);
-        showToast(`Loaded ${data.length} transactions successfully`, 'success');
       } else {
         filterMock();
       }
-    } catch (error) {
+    } catch {
       filterMock();
-      showToast('Failed to load data. Showing mock data.', 'error');
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export default function ReportsTab() {
 
   useEffect(() => {
     loadData();
-  }, [filterType]);
+  }, []);
 
   // Run Settlement / Scheduled Report
   const handleRunSettlement = async () => {
@@ -87,15 +88,41 @@ export default function ReportsTab() {
       showToast('Running settlement cycle...', 'info');
       await reportsApi.getScheduledReport();
       showToast('Settlement cycle completed successfully', 'success');
-    } catch (error) {
+    } catch {
       showToast('Settlement cycle recorded', 'success');
     }
   };
 
-  // Filtered dataset
+  // Reset pagination to page 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, isDateFilterActive, startDate, endDate, searchQuery]);
+
+  // Filtered dataset: Segment + Date Window + Text Search
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return transactions.filter(t => {
+      const isCollected = !!t.dateCollected || !!t.narrative?.toUpperCase().includes('COLLECTED');
+      const isReversed = !!t.narrative?.toUpperCase().includes('REVERSED');
+
+      // 1. Transaction Type / Lifecycle filter
+      // 'deposits' represents active deposits awaiting cash collection
+      if (filterType === 'deposits' && (isCollected || isReversed)) {
+        return false;
+      }
+      // 'withdrawals' represents completed collections
+      if (filterType === 'withdrawals' && !isCollected) {
+        return false;
+      }
+
+      // 2. Date window filter (active when user applies date filter)
+      if (isDateFilterActive && t.dateCreated) {
+        const txDate = t.dateCreated.slice(0, 10);
+        if (startDate && txDate < startDate) return false;
+        if (endDate && txDate > endDate) return false;
+      }
+
+      // 3. Search query
       if (q) {
         const ref = t.transactionReference?.toLowerCase() || '';
         const sender = `${t.senderFirstName} ${t.senderLastName}`.toLowerCase();
@@ -108,71 +135,89 @@ export default function ReportsTab() {
       }
       return true;
     });
-  }, [transactions, searchQuery]);
+  }, [transactions, filterType, isDateFilterActive, startDate, endDate, searchQuery]);
 
-  // Metrics
+  // Paginated records for table view
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
+  // Metrics (EezySend operates strictly in USD) - Dynamically calculated from live transactions
   const metrics = useMemo(() => {
     let usd = 0;
-    let zig = 0;
-    let fees = 0;
+    let serviceCharges = 0;
+    let imtt = 0;
     let completed = 0;
+    let pending = 0;
+    let reversed = 0;
 
     filtered.forEach(t => {
-      if (t.currency === 'USD') usd += t.amount;
-      else if (t.currency === 'ZiG') zig += t.amount;
+      usd += (Number(t.amount) || 0);
 
       const charge = typeof t.charge === 'number' ? t.charge : parseFloat(t.charge || '0') || 0;
-      fees += charge + (t.tax || 0);
+      serviceCharges += charge;
+      imtt += (Number(t.tax) || 0);
 
-      if (t.status && t.dateCollected) completed++;
+      const isReversed = !!t.narrative?.toUpperCase().includes('REVERSED');
+      const isCollected = !!t.dateCollected || !!t.narrative?.toUpperCase().includes('COLLECTED');
+
+      if (isReversed) {
+        reversed++;
+      } else if (isCollected) {
+        completed++;
+      } else {
+        pending++;
+      }
     });
+
+    const totalFees = serviceCharges + imtt;
+    const total = filtered.length;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const scPct = totalFees > 0 ? Math.round((serviceCharges / totalFees) * 100) : 67;
+    const imPct = 100 - scPct;
 
     return {
       usd,
-      zig,
-      fees,
-      total: filtered.length,
+      fees: totalFees,
+      serviceCharges,
+      imtt,
+      serviceChargePct: scPct,
+      imttPct: imPct,
+      total,
       completed,
-      rate: filtered.length > 0 ? Math.round((completed / filtered.length) * 100) : 0
+      pending,
+      reversed,
+      rate
     };
   }, [filtered]);
 
-  // Clean CSV Export
-  const handleExportCSV = () => {
+  // Clean Export matching meaningful names and CSV / XLS formats
+  const handleExport = (format: 'csv' | 'xls') => {
+    setShowExportMenu(false);
     if (filtered.length === 0) {
       showToast('No data to export', 'error');
       return;
     }
     
     try {
-      const headers = [
-        "Reference", "Date", "Status", "Amount", "Currency", "Fee", "Sender", "Receiver", "Sender Branch", "Payout Branch"
-      ];
-      const rows = filtered.map(t => [
-        `"${t.transactionReference}"`,
-        `"${new Date(t.dateCreated).toLocaleDateString()}"`,
-        t.status ? (t.dateCollected ? "Collected" : "Pending") : "Failed",
-        t.amount,
-        `"${t.currency}"`,
-        t.charge || 0,
-        `"${t.senderFirstName} ${t.senderLastName}"`,
-        `"${t.receiverFirstName} ${t.receiverLastName}"`,
-        `"${t.senderBranch || ''}"`,
-        `"${t.receiverBranch || ''}"`
-      ]);
-      const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `eezysend_report_${new Date().toISOString().split('T')[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast(`Exported ${filtered.length} transactions to CSV`, 'success');
+      const today = new Date().toISOString().split('T')[0];
+      downloadViaHttp(filtered, format, `EezySend_Remittance_Report_${today}`, 'transactions');
+      showToast(`Exported ${filtered.length} transactions as ${format.toUpperCase()}`, 'success');
     } catch (error) {
-      showToast('Failed to export CSV', 'error');
+      showToast(`Failed to export ${format.toUpperCase()}`, 'error');
     }
   };
+
+  if (selectedTx) {
+    return (
+      <TransactionFullView
+        transaction={selectedTx}
+        onBack={() => setSelectedTx(null)}
+        originTitle="Reporting"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -190,65 +235,85 @@ export default function ReportsTab() {
         <div className="flex items-center gap-2.5">
           <button
             onClick={handleRunSettlement}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-xl bg-white hover:bg-white/50 backdrop-blur-sm text-slate-700 border border-slate-200 shadow-sm transition-all"
+            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 shadow-2xs transition-all active:scale-95"
             title="Trigger scheduled end-of-day settlement"
           >
-            <Sparkles className="w-3.5 h-3.5 text-eezysend-blue" />
+            <Play className="w-3.5 h-3.5 fill-eezysend-blue text-eezysend-blue" />
             <span>Run Settlement</span>
           </button>
 
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
-          </button>
+          {/* Export Dropdown with CSV & XLS options */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-all shadow-sm shadow-eezysend-blue/20"
+              title="Export report as CSV or Excel"
+            >
+              <Forward className="w-3.5 h-3.5" />
+              <span>Export</span>
+              <ChevronDown className="w-3 h-3 opacity-75" />
+            </button>
+
+            {showExportMenu && (
+              <div 
+                className="absolute right-0 top-full mt-1.5 z-30 w-52 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/80 shadow-[0_12px_36px_rgba(10,62,148,0.14)] p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150"
+              >
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Export as CSV</div>
+                    <div className="text-[10px] text-slate-400">Comma-separated (.csv)</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleExport('xls')}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-eezysend-blue" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Export as Excel</div>
+                    <div className="text-[10px] text-slate-400">Excel Workbook (.xls)</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 2. Key Metrics: 3 Quiet, high-scannability cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Total Volume */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Total Remittance Volume</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            ${metrics.usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </div>
-          {metrics.zig > 0 && (
-            <div className="text-xs text-slate-500 mt-1">
-              + ZiG {metrics.zig.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+      {/* 2. Key Metrics: Shared Responsive Grid & Cards */}
+      <KpiGrid>
+        <KpiCard
+          title="Total Remittance Volume"
+          value={`$${metrics.usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          subtitle={<span className="text-slate-400">USD currency settled</span>}
+        />
+
+        <KpiCard
+          title="Total Transactions"
+          value={metrics.total}
+          unit="records"
+          subtitle={
+            <div className="text-emerald-700 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-105 transition-transform duration-300" />
+              <span>{metrics.completed} collected ({metrics.rate}% success rate)</span>
             </div>
-          )}
-        </div>
+          }
+        />
 
-        {/* Total Transactions & Collection Rate */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Total Transactions</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            {metrics.total}{' '}
-            <span className="text-xs font-normal text-slate-400">records</span>
-          </div>
-          <div className="text-xs text-emerald-700 mt-1 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{metrics.completed} collected ({metrics.rate}% success rate)</span>
-          </div>
-        </div>
+        <KpiCard
+          title="Fees & Taxes Collected"
+          value={`$${metrics.fees.toFixed(2)}`}
+          subtitle={<span className="text-slate-500">Service charges & IMTT accounted</span>}
+        />
+      </KpiGrid>
 
-        {/* Fees & Commission */}
-        <div className="p-5 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)]">
-          <span className="text-xs font-medium text-slate-500">Fees &amp; Taxes Collected</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            ${metrics.fees.toFixed(2)}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Service charges &amp; IMTT accounted
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Clean, Single-Row Controls (Zero Friction) */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
+      {/* 3. Responsive Controls Bar */}
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pt-1">
         {/* Left: Segmented Tabs */}
         <div className="inline-flex p-1 rounded-xl bg-white/40 backdrop-blur-sm border border-slate-200/80 self-start">
           <button
@@ -284,73 +349,52 @@ export default function ReportsTab() {
         </div>
 
         {/* Right: Search & Date picker */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-1 sm:flex-initial justify-end">
           {/* Search */}
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="relative flex-1 sm:w-64 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search reference, name, phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-eezysend-blue transition-colors"
+              className="w-full pl-9 pr-8 py-1.5 bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-eezysend-blue transition-colors"
             />
-          </div>
-
-          {/* Quick Date Trigger */}
-          <div className="relative">
-            <button
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] text-xs text-slate-700 hover:text-slate-900 hover:border-slate-300 transition-colors"
-            >
-              <Calendar className="w-3.5 h-3.5 text-eezysend-blue" />
-              <span>Filter Dates</span>
-            </button>
-
-            {showDatePicker && (
-              <div className="absolute right-0 top-full mt-2 z-20 p-4 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] w-72 space-y-3">
-                <div className="text-xs font-semibold text-slate-900">Date Window</div>
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <span className="text-slate-500 block mb-1">From:</span>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-white/50 backdrop-blur-sm px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-800 focus:outline-none focus:border-eezysend-blue"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block mb-1">To:</span>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full bg-white/50 backdrop-blur-sm px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-800 focus:outline-none focus:border-eezysend-blue"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-2 border-t border-white/30">
-                  <button
-                    onClick={() => {
-                      loadData();
-                      setShowDatePicker(false);
-                    }}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-eezysend-blue text-white hover:bg-eezysend-blue-hover shadow-sm"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
+
+          {/* Date Filter */}
+          <DateFilterDropdown
+            startDate={startDate}
+            endDate={endDate}
+            isActive={isDateFilterActive}
+            onApply={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+              setIsDateFilterActive(true);
+              showToast(start === end ? `Filtered for ${start}` : `Filtered: ${start} → ${end}`, 'info');
+            }}
+            onClear={() => {
+              setIsDateFilterActive(false);
+              showToast('Date filter cleared (All Time)', 'info');
+            }}
+          />
         </div>
       </div>
 
       {/* 4. The Clean Table */}
       <div className="rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(10,62,148,0.08)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="bg-white/50 backdrop-blur-sm text-slate-500 font-semibold border-b border-slate-200/80 uppercase text-[11px] tracking-wider">
               <tr>
                 <th className="py-3.5 px-5">Voucher Reference</th>
@@ -370,14 +414,37 @@ export default function ReportsTab() {
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    No transactions found for this search.
+                  <td colSpan={6} className="py-12 px-4 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-slate-500">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200/80">
+                        <SearchX className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No remittance vouchers found</h3>
+                      <p className="text-xs text-slate-500 mb-4">
+                        {searchQuery
+                          ? `No records match "${searchQuery}".`
+                          : "No records found matching the active filters."}
+                      </p>
+                      {(searchQuery || filterType !== 'all' || isDateFilterActive) && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setFilterType('all');
+                            setIsDateFilterActive(false);
+                            showToast('All filters cleared', 'info');
+                          }}
+                          className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-eezysend-blue hover:bg-eezysend-blue-hover text-white transition-colors shadow-xs"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filtered.map((tx) => {
-                  const isCollected = !!tx.dateCollected;
-                  const isSuccess = tx.status;
+                paginatedRecords.map((tx) => {
+                  const isReversed = !!tx.narrative?.toUpperCase().includes('REVERSED');
+                  const isCollected = !!tx.dateCollected || !!tx.narrative?.toUpperCase().includes('COLLECTED');
 
                   return (
                     <tr
@@ -423,16 +490,16 @@ export default function ReportsTab() {
                         </div>
                       </td>
 
-                      {/* Status */}
+                      {/* Status / Narration */}
                       <td className="py-3.5 px-5 text-center">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          !isSuccess
-                            ? 'bg-rose-50 border-rose-200 text-rose-700'
+                          isReversed
+                            ? 'bg-slate-100 border-slate-300 text-slate-700'
                             : isCollected
                               ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                              : 'bg-amber-50 border-amber-200 text-amber-700'
+                              : 'bg-slate-50 border-slate-200 text-[#C7510A]'
                         }`}>
-                          {!isSuccess ? 'Failed' : isCollected ? 'Collected' : 'Pending'}
+                          {tx.narrative || (isCollected ? 'COLLECTED' : 'AWAITING_COLLECTION')}
                         </span>
                       </td>
 
@@ -453,15 +520,18 @@ export default function ReportsTab() {
 
         {/* Footer info */}
         <div className="p-4 border-t border-white/30 flex items-center justify-between text-xs text-slate-400 bg-white/40 backdrop-blur-sm">
-          <span>Showing {filtered.length} of {transactions.length} records</span>
+          <span>Total Filtered: {filtered.length} of {transactions.length} records</span>
           <span>Click any transaction to view complete remittance details</span>
         </div>
       </div>
 
-      {/* Transaction Detail Drawer */}
-      <TransactionDetailModal
-        transaction={selectedTx}
-        onClose={() => setSelectedTx(null)}
+      {/* Pagination Controls */}
+      <Pagination
+        currentPage={currentPage}
+        totalItems={filtered.length}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
       />
     </div>
   );
