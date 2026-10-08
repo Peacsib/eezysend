@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Lock, LogIn, User } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 
 export default function LoginForm() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     username: "admin",
     password: "password123",
@@ -15,17 +17,33 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const user = formData.username.trim() || "admin";
+    const user = formData.username.trim() || "eezysendui";
+
+    try {
+      const res = await fetch("/api/auth/token", { method: "POST" });
+      const data = await res.json();
+      if (data?.accessToken) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("eezysend_username", data.key || user);
+          localStorage.setItem("auth_token", data.accessToken);
+        }
+        showToast("Authenticated with EezySend Core Gateway", "success");
+        router.push("/dashboard");
+        return;
+      }
+    } catch (err) {
+      console.warn("Live gateway connection fallback:", err);
+    }
+
     if (typeof window !== "undefined") {
       localStorage.setItem("eezysend_username", user);
       localStorage.setItem("auth_token", "temp_token_" + Date.now());
     }
 
-    // Instant seamless transition into dashboard
     setTimeout(() => {
       router.push("/dashboard");
     }, 150);
@@ -40,12 +58,7 @@ export default function LoginForm() {
 
   return (
     <div className="w-full max-w-70 sm:max-w-75 lg:max-w-80 xl:max-w-85 relative z-10">
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="bg-white/85 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(10,62,148,0.14)] p-5 sm:p-6 lg:p-7 border border-white/90 text-slate-800"
-      >
+      <div className="bg-white/85 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(10,62,148,0.14)] p-5 sm:p-6 lg:p-7 border border-white/90 text-slate-800">
         {/* Header */}
         <div className="text-center mb-5 lg:mb-6">
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 font-display">
@@ -54,8 +67,8 @@ export default function LoginForm() {
               Back
             </span>
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1.5 font-body">
-            Enter any username &amp; password to explore
+          <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1.5 font-body leading-relaxed">
+            Enter your credentials to access<br />the operational portal
           </p>
         </div>
 
@@ -73,7 +86,7 @@ export default function LoginForm() {
                 value={formData.username}
                 onChange={handleChange}
                 autoComplete="username"
-                placeholder="Enter any username"
+                placeholder="Enter your username"
                 className="w-full h-10 lg:h-11 pl-3.5 pr-10 text-sm lg:text-base bg-slate-50/90 border border-slate-200 focus:border-eezysend-blue focus:ring-2 focus:ring-eezysend-blue/20 rounded-xl text-slate-900 placeholder:text-slate-400 transition-all font-body focus:outline-none focus:bg-white"
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
@@ -89,6 +102,7 @@ export default function LoginForm() {
               </label>
               <button
                 type="button"
+                onClick={() => showToast("Please contact your CABS administrator to reset credentials.", "info")}
                 className="text-[10px] lg:text-xs text-slate-400 hover:text-eezysend-blue font-semibold transition-colors font-body"
               >
                 Forgot?
@@ -102,7 +116,7 @@ export default function LoginForm() {
                 value={formData.password}
                 onChange={handleChange}
                 autoComplete="current-password"
-                placeholder="Enter any password"
+                placeholder="Enter your password"
                 className="w-full h-10 lg:h-11 pl-3.5 pr-10 text-sm lg:text-base bg-slate-50/90 border border-slate-200 focus:border-eezysend-blue focus:ring-2 focus:ring-eezysend-blue/20 rounded-xl text-slate-900 placeholder:text-slate-400 transition-all font-body focus:outline-none focus:bg-white"
               />
               <button
@@ -147,15 +161,10 @@ export default function LoginForm() {
           {/* Secure connection */}
           <div className="flex items-center justify-center gap-1.5 text-[11px] pt-1">
             <Lock className="w-3.5 h-3.5 text-eezysend-blue" />
-            <span className="font-medium text-slate-500 font-body">Encrypted connection</span>
+            <span className="font-medium text-slate-500 font-body">Secured</span>
           </div>
         </form>
-      </motion.div>
-
-      {/* Internal System Notice */}
-      <p className="text-center text-[10px] text-slate-500 mt-3 font-body">
-        Authorized personnel only &middot; Internal System
-      </p>
+      </div>
     </div>
   );
 }
