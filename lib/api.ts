@@ -337,6 +337,39 @@ export const transactionsApi = {
 // High-fidelity Mock Data for local testing and visual verification
 export const mockReportTransactions: ReportTransaction[] = [
   {
+    transactionReference: "262780708942",
+    internalReferenceID: "FT26278MTSDG",
+    dateCreated: "2026-10-05 11:15",
+    dateCollected: "",
+    status: true,
+    transactionType: "REMITTANCE",
+    currency: "USD",
+    amount: 20.0,
+    charge: "0.00",
+    tax: 0.0,
+    channel: "EASYSEND_ON_MOBILE",
+    narrative: "AWAITING_COLLECTION",
+    reported: true,
+    withdrawalReported: false,
+    withdrawalReference: "",
+    senderFirstName: "COSMAS",
+    senderLastName: "MATSVAI",
+    senderNationalId: "07082318W07",
+    senderPhone: "263783545374",
+    senderAddress: "BLK 4 ZINWA MAROVANE",
+    senderTown: "BUHERA",
+    senderBranch: "ZW0010042",
+    senderTeller: "TL-SYS-001",
+    receiverFirstName: "talent",
+    receiverLastName: "chiwara",
+    receiverNationalId: "58286464B23",
+    receiverPhone: "0783044933",
+    receiverAddress: "2150 rutendo Radcliff 2",
+    receiverTown: "kwekwe",
+    receiverBranch: "",
+    receiverTeller: "",
+  },
+  {
     transactionReference: "EZS-20261005-0981",
     internalReferenceID: "CABS-TX-990142",
     dateCreated: "2026-10-05T18:42:15.000Z",
@@ -669,16 +702,25 @@ import type { HealthResponse, SubsystemHealth } from './types';
 
 export const healthApi = {
   // GET /health
-  checkHealth: async (): Promise<{ status: HealthResponse; latencyMs: number }> => {
+  checkHealth: async (simulate?: string): Promise<{ status: HealthResponse; latencyMs: number; statusCode?: number }> => {
     const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
     try {
-      const status = await api.get<HealthResponse>('/health');
+      const endpoint = simulate ? `/api/health?simulate=${simulate}` : '/api/health';
+      const res = await fetch(endpoint, { cache: 'no-store' });
+      const data = await res.json();
       const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      return { status, latencyMs: Math.max(1, Math.round(end - start)) };
+      return {
+        status: { health: data.health || (res.ok ? 'UP' : 'DOWN') },
+        latencyMs: data.latencyMs || Math.max(1, Math.round(end - start)),
+        statusCode: data.statusCode ?? res.status
+      };
     } catch {
-      // Fallback response with realistic latency
       const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      return { status: { health: 'UP' }, latencyMs: Math.max(1, Math.round(end - start)) };
+      return {
+        status: { health: 'DOWN' },
+        latencyMs: Math.max(1, Math.round(end - start)),
+        statusCode: 0
+      };
     }
   },
 };

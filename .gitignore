@@ -40,4 +40,6 @@ next-env.d.ts
 # mcp & ide
 .playwright-mcp/
 .kiro/
+/peace-ui
+.agents/
 

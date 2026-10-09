@@ -28,6 +28,7 @@ import { KpiCard, KpiGrid } from "./KpiCard";
 import { Pagination } from "./Pagination";
 import { DateFilterDropdown } from "./DateFilterDropdown";
 import { SMSFullView } from "./SMSFullView";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 export default function SMSTab() {
   const { showToast } = useToast();
@@ -499,15 +500,11 @@ export default function SMSTab() {
 
                       {/* Overall Status Badge */}
                       <td className="py-3.5 px-5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          bothDelivered
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                            : partial
-                              ? 'bg-slate-50 border-slate-200 text-[#C7510A]'
-                              : 'bg-rose-50 border-rose-200 text-rose-700'
-                        }`}>
+                        <StatusBadge
+                          status={bothDelivered ? 'DELIVERED' : partial ? 'PARTIAL' : 'FAILED'}
+                        >
                           {bothDelivered ? 'Delivered' : partial ? 'Partial' : 'Failed'}
-                        </span>
+                        </StatusBadge>
                       </td>
 
                       {/* Action */}

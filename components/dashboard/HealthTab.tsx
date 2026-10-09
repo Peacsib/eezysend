@@ -6,24 +6,25 @@ import {
   Check,
   Copy,
   Server,
-  Terminal,
-  ShieldCheck,
-  Radio,
-  Clock,
-  ArrowRight
+  Activity,
+  AlertTriangle,
+  XCircle,
+  CheckCircle2
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import StatusBadge, { getStatusBadgeClasses } from "@/components/ui/StatusBadge";
 
 interface HealthLogEntry {
   id: string;
   time: string;
   statusCode: number;
-  status: string;
+  statusText: string;
+  status: 'UP' | 'DEGRADED' | 'DOWN';
   latencyMs: number;
 }
 
 interface LiveHealthData {
-  health: string;
+  health: 'UP' | 'DEGRADED' | 'DOWN';
   statusCode: number;
   statusText: string;
   latencyMs: number;
@@ -46,16 +47,16 @@ export default function HealthTab() {
     health: "UP",
     statusCode: 200,
     statusText: "OK",
-    latencyMs: 124,
+    latencyMs: 493,
     endpointUrl: DEFAULT_ENDPOINT,
     headers: {
+      "access-control-allow-origin": "*",
       "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
       "connection": "keep-alive",
       "content-type": "application/json",
       "date": new Date().toUTCString(),
       "pragma": "no-cache",
       "transfer-encoding": "chunked",
-      "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
       "x-content-type-options": "nosniff",
       "x-frame-options": "DENY",
       "x-xss-protection": "1; mode=block",
@@ -69,8 +70,9 @@ export default function HealthTab() {
       id: "1",
       time: new Date().toLocaleTimeString(),
       statusCode: 200,
+      statusText: "OK",
       status: "UP",
-      latencyMs: 124,
+      latencyMs: 493,
     }
   ]);
 
@@ -83,115 +85,111 @@ export default function HealthTab() {
 
   const runHealthCheck = useCallback(async (silent = false) => {
     setIsPinging(true);
+
     if (!silent) {
-      showToast('Checking /health endpoint...', 'info');
+      showToast('Pinging live AWS NLB /health endpoint...', 'info');
     }
 
     const start = performance.now();
     try {
-      // In browser, calling Next.js API or direct NLB
-      const res = await fetch(DEFAULT_ENDPOINT, {
+      const res = await fetch('/api/health', {
         method: "GET",
-        headers: { "Accept": "*/*" },
+        headers: { "Accept": "application/json" },
         cache: "no-store",
-      }).catch(() => null);
+      });
 
       const latencyMs = Math.max(1, Math.round(performance.now() - start));
       const nowStr = new Date().toLocaleTimeString();
+      const data = await res.json().catch(() => ({}));
 
-      if (res && res.ok) {
-        const json = await res.json().catch(() => ({ health: "UP" }));
-        
-        // Extract headers
-        const headerMap: Record<string, string> = {};
-        res.headers.forEach((val, k) => {
-          headerMap[k] = val;
-        });
+      const rawHealth: string = (data.health || '').toUpperCase();
+      let determinedHealth: 'UP' | 'DEGRADED' | 'DOWN' = 'UP';
 
-        // Ensure canonical headers matching swagger response
-        const resolvedHeaders = {
-          "cache-control": headerMap["cache-control"] || "no-cache, no-store, max-age=0, must-revalidate",
-          "connection": headerMap["connection"] || "keep-alive",
-          "content-type": headerMap["content-type"] || "application/json",
-          "date": headerMap["date"] || new Date().toUTCString(),
-          "pragma": "no-cache",
-          "transfer-encoding": "chunked",
-          "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
-          "x-content-type-options": headerMap["x-content-type-options"] || "nosniff",
-          "x-frame-options": headerMap["x-frame-options"] || "DENY",
-          "x-xss-protection": headerMap["x-xss-protection"] || "1; mode=block",
-        };
-
-        const resolvedHealth = json.health || "UP";
-        setHealthData({
-          health: resolvedHealth,
-          statusCode: res.status,
-          statusText: res.statusText || "OK",
-          latencyMs,
-          endpointUrl: DEFAULT_ENDPOINT,
-          headers: resolvedHeaders,
-          rawJson: JSON.stringify(json, null, 2),
-          lastCheckedTime: nowStr,
-        });
-
-        setHistory(prev => [
-          {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            time: nowStr,
-            statusCode: res.status,
-            status: resolvedHealth,
-            latencyMs,
-          },
-          ...prev.slice(0, 7),
-        ]);
-
-        if (!silent) {
-          showToast(`Health Check: UP (${latencyMs}ms)`, 'success');
-        }
+      if (!res.ok || rawHealth === 'DOWN' || data.statusCode >= 500 || data.statusCode === 0) {
+        determinedHealth = 'DOWN';
+      } else if (latencyMs > 1200 || rawHealth === 'DEGRADED') {
+        determinedHealth = 'DEGRADED';
       } else {
-        // Fallback with live local probe
-        const nowUtc = new Date().toUTCString();
-        setHealthData(prev => ({
-          ...prev,
-          latencyMs,
-          lastCheckedTime: nowStr,
-          headers: {
-            ...prev.headers,
-            date: nowUtc,
-          }
-        }));
+        determinedHealth = 'UP';
+      }
 
-        setHistory(prev => [
-          {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            time: nowStr,
-            statusCode: 200,
-            status: "UP",
-            latencyMs,
-          },
-          ...prev.slice(0, 7),
-        ]);
+      const statusCode = data.statusCode ?? res.status;
+      const statusText = data.statusText || (determinedHealth === 'DOWN' ? 'Service Unavailable' : 'OK');
 
-        if (!silent) {
+      setHealthData({
+        health: determinedHealth,
+        statusCode,
+        statusText,
+        latencyMs: data.latencyMs ?? latencyMs,
+        endpointUrl: DEFAULT_ENDPOINT,
+        headers: data.headers || {},
+        rawJson: data.rawJson || JSON.stringify(data, null, 2),
+        lastCheckedTime: nowStr,
+      });
+
+      setHistory(prev => [
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          time: nowStr,
+          statusCode,
+          statusText,
+          status: determinedHealth,
+          latencyMs: data.latencyMs ?? latencyMs,
+        },
+        ...prev.slice(0, 7),
+      ]);
+
+      if (!silent) {
+        if (determinedHealth === 'DOWN') {
+          showToast(`Health Alert: DOWN (${statusCode} ${statusText})`, 'error');
+        } else if (determinedHealth === 'DEGRADED') {
+          showToast(`Health Warning: DEGRADED (Latency: ${latencyMs}ms)`, 'info');
+        } else {
           showToast(`Health Check: UP (${latencyMs}ms)`, 'success');
         }
       }
-    } catch {
-      // Graceful fallback
+    } catch (err: unknown) {
+      const latencyMs = Math.max(1, Math.round(performance.now() - start));
+      const nowStr = new Date().toLocaleTimeString();
+      const errorMsg = err instanceof Error ? err.message : 'Connection failed';
+
+      setHealthData({
+        health: 'DOWN',
+        statusCode: 0,
+        statusText: 'Connection Refused / Network Error',
+        latencyMs,
+        endpointUrl: DEFAULT_ENDPOINT,
+        headers: { "error": errorMsg, "date": new Date().toUTCString() },
+        rawJson: JSON.stringify({ health: "DOWN", error: errorMsg }, null, 2),
+        lastCheckedTime: nowStr,
+      });
+
+      setHistory(prev => [
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          time: nowStr,
+          statusCode: 0,
+          statusText: 'Network Failed',
+          status: 'DOWN',
+          latencyMs,
+        },
+        ...prev.slice(0, 7),
+      ]);
+
       if (!silent) {
-        showToast('Health check complete', 'success');
+        showToast(`Health Check: DOWN (Server Unreachable)`, 'error');
       }
     } finally {
       setIsPinging(false);
     }
   }, [showToast]);
 
-  // Initial check
+  // Initial check on mount
   useEffect(() => {
     void runHealthCheck(true);
   }, [runHealthCheck]);
 
-  // Auto-ping timer
+  // Auto-ping timer (every 15s)
   useEffect(() => {
     if (!autoPing) return;
     const interval = setInterval(() => {
@@ -202,24 +200,71 @@ export default function HealthTab() {
 
   const curlCommand = `curl -X 'GET' '${DEFAULT_ENDPOINT}' -H 'accept: */*'`;
 
+  // Status visual configurations using shared design tokens
+  const getStatusConfig = (status: 'UP' | 'DEGRADED' | 'DOWN') => {
+    const styling = getStatusBadgeClasses(status);
+    switch (status) {
+      case 'UP':
+        return {
+          label: 'UP',
+          subtext: '(Operational)',
+          textColor: styling.textColor,
+          subtextColor: styling.subtextColor,
+          badgeBg: styling.badge,
+          dotBg: styling.dot,
+          cardBorder: 'border-white/60 hover:border-emerald-300/40',
+        };
+      case 'DEGRADED':
+        return {
+          label: 'DEGRADED',
+          subtext: '(High Latency)',
+          textColor: styling.textColor,
+          subtextColor: styling.subtextColor,
+          badgeBg: styling.badge,
+          dotBg: styling.dot,
+          cardBorder: 'border-slate-200/80 hover:border-slate-300',
+        };
+      case 'DOWN':
+        return {
+          label: 'DOWN',
+          subtext: '(Outage / Unreachable)',
+          textColor: styling.textColor,
+          subtextColor: styling.subtextColor,
+          badgeBg: styling.badge,
+          dotBg: styling.dot,
+          cardBorder: 'border-rose-200/80 hover:border-rose-300',
+        };
+    }
+  };
+
+  const statusConfig = getStatusConfig(healthData.health);
+
+  // Latency styling
+  const getLatencyInfo = (ms: number) => {
+    if (ms < 300) return { label: 'Optimal (<300ms)', color: 'text-emerald-600' };
+    if (ms < 800) return { label: 'Normal', color: 'text-slate-500' };
+    if (ms < 1500) return { label: 'Elevated (>800ms)', color: 'text-[#C7510A]' };
+    return { label: 'High Latency (>1.5s)', color: 'text-rose-600 font-bold' };
+  };
+
+  const latencyInfo = getLatencyInfo(healthData.latencyMs);
+
   return (
     <div className="space-y-4 max-w-6xl mx-auto animate-in fade-in duration-150">
-      {/* 1. Header: Calm, clean, no clutter */}
+      {/* 1. Header: Calm, clean, live status indicator */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
             <span>System Health</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {healthData.health}
-            </span>
+            <StatusBadge status={healthData.health} dot={true} />
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Real-time status of the EezySend backend service from <span className="font-mono text-slate-700">/health</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center flex-wrap gap-2.5">
+
           <button
             onClick={() => setAutoPing(!autoPing)}
             className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
@@ -242,32 +287,55 @@ export default function HealthTab() {
         </div>
       </div>
 
-      {/* 2. Key Metrics - 4 Calm Uniform Cards with Hover Reactivity */}
+      {/* 2. Key Metrics - 4 Responsive Cards with Dynamic Statuses */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="group relative p-4 rounded-2xl bg-white/75 hover:bg-white/90 backdrop-blur-xl border border-white/60 hover:border-eezysend-blue/20 shadow-[0_8px_32px_rgba(10,62,148,0.07)] hover:shadow-[0_14px_36px_rgba(10,62,148,0.12)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-default flex flex-col justify-between">
+        {/* Service Status */}
+        <div className={`group relative p-4 rounded-2xl bg-white/75 hover:bg-white/90 backdrop-blur-xl border ${statusConfig.cardBorder} shadow-[0_8px_32px_rgba(10,62,148,0.07)] hover:shadow-[0_14px_36px_rgba(10,62,148,0.12)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-default flex flex-col justify-between`}>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Service Status</span>
           <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-lg font-bold text-emerald-700 tracking-tight">
-              {healthData.health}
+            <span className={`text-lg font-bold tracking-tight ${statusConfig.textColor}`}>
+              {statusConfig.label}
             </span>
-            <span className="text-[11px] font-medium text-emerald-600">(Operational)</span>
+            <span className={`text-[11px] font-medium ${statusConfig.subtextColor}`}>
+              {statusConfig.subtext}
+            </span>
           </div>
         </div>
 
+        {/* HTTP Response */}
         <div className="group relative p-4 rounded-2xl bg-white/75 hover:bg-white/90 backdrop-blur-xl border border-white/60 hover:border-eezysend-blue/20 shadow-[0_8px_32px_rgba(10,62,148,0.07)] hover:shadow-[0_14px_36px_rgba(10,62,148,0.12)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-default flex flex-col justify-between">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">HTTP Response</span>
-          <span className="text-lg font-bold text-slate-900 block mt-1 tracking-tight">
-            {healthData.statusCode} <span className="text-[11px] font-normal text-slate-500">{healthData.statusText}</span>
+          <span className={`text-lg font-bold block mt-1 tracking-tight ${
+            healthData.statusCode >= 200 && healthData.statusCode < 300 
+              ? 'text-slate-900' 
+              : healthData.statusCode >= 400 && healthData.statusCode < 500
+              ? 'text-amber-700'
+              : 'text-rose-700'
+          }`}>
+            {healthData.statusCode === 0 ? 'ERR' : healthData.statusCode} 
+            <span className="text-[11px] font-normal ml-1 text-slate-500">
+              {healthData.statusText}
+            </span>
           </span>
         </div>
 
+        {/* Round-Trip Latency */}
         <div className="group relative p-4 rounded-2xl bg-white/75 hover:bg-white/90 backdrop-blur-xl border border-white/60 hover:border-eezysend-blue/20 shadow-[0_8px_32px_rgba(10,62,148,0.07)] hover:shadow-[0_14px_36px_rgba(10,62,148,0.12)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-default flex flex-col justify-between">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Round-Trip Latency</span>
-          <span className="text-lg font-bold text-slate-900 block mt-1 tracking-tight">
-            {healthData.latencyMs} <span className="text-[11px] font-normal text-slate-500">ms</span>
-          </span>
+          <div className="flex items-baseline gap-1.5 mt-1">
+            <span className={`text-lg font-bold tracking-tight ${
+              healthData.latencyMs > 1500 ? 'text-rose-700' : healthData.latencyMs > 800 ? 'text-amber-700' : 'text-slate-900'
+            }`}>
+              {healthData.latencyMs}
+            </span>
+            <span className="text-[11px] font-normal text-slate-500">ms</span>
+            <span className={`text-[10px] ml-auto font-medium ${latencyInfo.color}`}>
+              {latencyInfo.label}
+            </span>
+          </div>
         </div>
 
+        {/* Last Checked */}
         <div className="group relative p-4 rounded-2xl bg-white/75 hover:bg-white/90 backdrop-blur-xl border border-white/60 hover:border-eezysend-blue/20 shadow-[0_8px_32px_rgba(10,62,148,0.07)] hover:shadow-[0_14px_36px_rgba(10,62,148,0.12)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-default flex flex-col justify-between">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Last Checked</span>
           <span className="text-lg font-bold text-slate-900 block mt-1 tracking-tight">
@@ -324,7 +392,7 @@ export default function HealthTab() {
               </button>
             </div>
 
-            <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200/60 font-mono text-slate-800 text-xs leading-relaxed select-all">
+            <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200/60 font-mono text-slate-800 text-xs leading-relaxed select-all max-h-60 overflow-y-auto">
               <pre>{healthData.rawJson}</pre>
             </div>
           </div>
@@ -387,26 +455,34 @@ export default function HealthTab() {
                 <th className="py-2.5 px-4">Time</th>
                 <th className="py-2.5 px-4">Endpoint</th>
                 <th className="py-2.5 px-4">HTTP Status</th>
-                <th className="py-2.5 px-4">Health Result</th>
+                <th className="py-2.5 px-4 text-center">Health Result</th>
                 <th className="py-2.5 px-4 text-right">Latency</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {history.map((entry, idx) => (
-                <tr key={`${entry.id}-${idx}`} className="hover:bg-white/60 backdrop-blur-sm transition-all duration-200 group hover:shadow-2xs">
-                  <td className="py-2.5 px-4 font-mono text-slate-500 group-hover:text-eezysend-blue transition-colors">{entry.time}</td>
-                  <td className="py-2.5 px-4 font-mono text-slate-700 group-hover:text-eezysend-blue transition-colors">/health</td>
-                  <td className="py-2.5 px-4">
-                    <span className="font-mono text-slate-700">{entry.statusCode} OK</span>
-                  </td>
-                  <td className="py-2.5 px-4">
-                    <span className="font-semibold text-emerald-700">{entry.status}</span>
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                    {entry.latencyMs} ms
-                  </td>
-                </tr>
-              ))}
+              {history.map((entry, idx) => {
+                const isDown = entry.status === 'DOWN' || entry.statusCode >= 500 || entry.statusCode === 0;
+                const isDegraded = entry.status === 'DEGRADED' || entry.latencyMs > 1200;
+                return (
+                  <tr key={`${entry.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 px-4 font-mono text-slate-500">{entry.time}</td>
+                    <td className="py-2.5 px-4 font-mono text-slate-700">/health</td>
+                    <td className="py-2.5 px-4 font-mono">
+                      <span className={isDown ? 'text-rose-600 font-bold' : isDegraded ? 'text-[#C7510A] font-bold' : 'text-slate-700'}>
+                        {entry.statusCode === 0 ? 'CONNECTION FAILED' : `${entry.statusCode} ${entry.statusText}`}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-center">
+                      <StatusBadge status={entry.status} />
+                    </td>
+                    <td className="py-2.5 px-4 text-right font-mono">
+                      <span className={entry.latencyMs > 1500 ? 'text-rose-600 font-bold' : entry.latencyMs > 800 ? 'text-[#C7510A]' : 'text-slate-600'}>
+                        {entry.latencyMs} ms
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

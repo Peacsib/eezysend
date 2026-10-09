@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { ReportTransaction } from "@/lib/types";
 import VoucherPrintSlip from "./VoucherPrintSlip";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 interface TransactionDetailModalProps {
   readonly transaction: ReportTransaction | null;
@@ -122,9 +123,7 @@ export default function TransactionDetailModal({
           </div>
 
           <div className="flex items-center gap-3">
-            <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${getStatusBadgeClass()}`}>
-              {getStatusText()}
-            </span>
+            <StatusBadge status={getStatusText()} dot={true} />
 
             <button
               onClick={onClose}

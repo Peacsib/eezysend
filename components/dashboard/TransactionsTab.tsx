@@ -23,6 +23,7 @@ import { KpiCard, KpiGrid } from "./KpiCard";
 import { Pagination } from "./Pagination";
 import { DateFilterDropdown } from "./DateFilterDropdown";
 import { downloadViaHttp } from "@/lib/csvExport";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 export default function TransactionsTab() {
   const { showToast } = useToast();
@@ -238,17 +239,19 @@ export default function TransactionsTab() {
     };
   }, [transactions]);
 
-  // Clean Export matching meaningful names and CSV / XLS formats
-  const handleExport = (format: 'csv' | 'xls') => {
+  // Clean Export matching meaningful names and CSV / XLSX / XLS formats
+  const handleExport = (format: 'csv' | 'xlsx' | 'xls', scope: 'all' | 'page' = 'all') => {
     setShowExportMenu(false);
-    if (filtered.length === 0) {
+    const dataToExport = scope === 'page' ? paginatedRecords : filtered;
+    if (dataToExport.length === 0) {
       showToast('No data to export', 'error');
       return;
     }
     try {
       const today = new Date().toISOString().split('T')[0];
-      downloadViaHttp(filtered, format, `EezySend_Transactions_Report_${today}`, 'transactions');
-      showToast(`Exported ${filtered.length} transactions as ${format.toUpperCase()}`, 'success');
+      const pageSuffix = scope === 'page' ? `_Page${currentPage}` : '';
+      downloadViaHttp(dataToExport, format, `EezySend_Transactions_Report_${today}${pageSuffix}`, 'transactions');
+      showToast(`Exported ${dataToExport.length} transactions as ${format.toUpperCase()}`, 'success');
     } catch (error) {
       showToast(`Failed to export ${format.toUpperCase()}`, 'error');
     }
@@ -338,27 +341,38 @@ export default function TransactionsTab() {
 
             {showExportMenu && (
               <div 
-                className="absolute right-0 top-full mt-1.5 z-30 w-52 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/80 shadow-[0_12px_36px_rgba(10,62,148,0.14)] p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150"
+                className="absolute right-0 top-full mt-1.5 z-30 w-60 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/80 shadow-[0_12px_36px_rgba(10,62,148,0.14)] p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150"
               >
                 <button
-                  onClick={() => handleExport('csv')}
+                  onClick={() => handleExport('xlsx', 'all')}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
-                    <div className="font-semibold text-slate-800">Export as CSV</div>
-                    <div className="text-[10px] text-slate-400">Comma-separated (.csv)</div>
+                    <div className="font-semibold text-slate-800">Export as Excel (.xlsx)</div>
+                    <div className="text-[10px] text-slate-400">Sheets: Page 1 (1-50), Page 2...</div>
                   </div>
                 </button>
 
                 <button
-                  onClick={() => handleExport('xls')}
+                  onClick={() => handleExport('csv', 'all')}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-eezysend-blue" />
+                  <FileSpreadsheet className="w-4 h-4 text-blue-600 shrink-0" />
                   <div>
-                    <div className="font-semibold text-slate-800">Export as Excel</div>
-                    <div className="text-[10px] text-slate-400">Excel Workbook (.xls)</div>
+                    <div className="font-semibold text-slate-800">Export as CSV (.csv)</div>
+                    <div className="text-[10px] text-slate-400">All filtered records</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleExport('csv', 'page')}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:text-eezysend-blue hover:bg-slate-50 rounded-xl transition-colors text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-800">Export Page {currentPage} (.csv)</div>
+                    <div className="text-[10px] text-slate-400">Current {paginatedRecords.length} rows only</div>
                   </div>
                 </button>
               </div>
@@ -587,9 +601,7 @@ export default function TransactionsTab() {
 
                       {/* Status / Narration */}
                       <td className="py-3.5 px-5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getNarrativeBadgeClass(tx.narrative)}`}>
-                          {tx.narrative || (isCollected ? 'COLLECTED' : 'AWAITING_COLLECTION')}
-                        </span>
+                        <StatusBadge status={tx.narrative || (isCollected ? 'COLLECTED' : 'AWAITING_COLLECTION')} />
                       </td>
 
                       {/* Action */}

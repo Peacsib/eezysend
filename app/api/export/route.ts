@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateTransactionsCSV, generateTransactionsXLS } from '@/lib/csvExport';
+import { generateTransactionsCSV, generateTransactionsWorkbook, generateTransactionsXLS } from '@/lib/csvExport';
 import type { ReportTransaction } from '@/lib/types';
 
 export async function POST(req: Request) {
@@ -49,14 +49,21 @@ export async function POST(req: Request) {
 
     // Remittance / Transactions report
     const transactions = data as ReportTransaction[];
-    if (format === 'xls') {
-      const xlsContent = generateTransactionsXLS(transactions);
-      const safeFilename = filename.endsWith('.xls') ? filename : `${filename}.xls`;
+    if (format === 'xlsx' || format === 'xls') {
+      const isXlsx = format === 'xlsx' || !filename.endsWith('.xls');
+      const buffer = await generateTransactionsWorkbook(transactions, 50);
+      const ext = isXlsx ? '.xlsx' : '.xls';
+      const safeFilename = filename.endsWith(ext)
+        ? filename
+        : filename.replace(/\.(xls|xlsx)$/, '') + ext;
+      const contentType = isXlsx
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/vnd.ms-excel';
 
-      return new Response(xlsContent, {
+      return new Response(buffer as unknown as BodyInit, {
         status: 200,
         headers: {
-          'Content-Type': 'application/vnd.ms-excel; charset=utf-8',
+          'Content-Type': contentType,
           'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
         },
       });

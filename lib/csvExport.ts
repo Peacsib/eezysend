@@ -1,94 +1,307 @@
+import ExcelJS from 'exceljs';
 import { ReportTransaction } from './types';
 
 /**
- * Formats date into exact M/D/YYYY string wrapped in double quotes.
- * Example: "4/20/2023", "7/1/2025", "10/1/2025"
+ * Exact 25 column headers matching EezySend institutional template:
+ * Columns A through Y:
+ * 1. EezySend Reference ID
+ * 2. T24 Deposit Reference ID
+ * 3. T24 Withdrawal Reference ID
+ * 4. Amount
+ * 5. Charge
+ * 6. Currency
+ * 7. Date Created
+ * 8. Date Collected
+ * 9. Narrative
+ * 10. Receiver Address
+ * 11. Receiver Branch
+ * 12. Receiver Firstname
+ * 13. Receiver Lastname
+ * 14. Receiver National ID
+ * 15. Receiver Phone
+ * 16. Receiver Town
+ * 17. Sender Address
+ * 18. Sender Branch
+ * 19. Sender Firstname
+ * 20. Sender Lastname
+ * 21. Sender National ID
+ * 22. Sender Phone
+ * 23. Sender Town
+ * 24. Tax
+ * 25. Channel
  */
-export const formatCSVDate = (dateVal?: string | null): string => {
-  if (!dateVal) return '""';
-  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
-    const [year, month, day] = dateVal.slice(0, 10).split('-').map(Number);
-    return `"${month}/${day}/${year}"`;
+export const TRANSACTION_EXPORT_HEADERS = [
+  "EezySend Reference ID",
+  "T24 Deposit Reference ID",
+  "T24 Withdrawal Reference ID",
+  "Amount",
+  "Charge",
+  "Currency",
+  "Date Created",
+  "Date Collected",
+  "Narrative",
+  "Receiver Address",
+  "Receiver Branch",
+  "Receiver Firstname",
+  "Receiver Lastname",
+  "Receiver National ID",
+  "Receiver Phone",
+  "Receiver Town",
+  "Sender Address",
+  "Sender Branch",
+  "Sender Firstname",
+  "Sender Lastname",
+  "Sender National ID",
+  "Sender Phone",
+  "Sender Town",
+  "Tax",
+  "Channel"
+] as const;
+
+/**
+ * Formats date to YYYY-MM-DD HH:mm (e.g. 2026-10-05 11:15)
+ */
+export const formatExportDate = (dateVal?: string | null): string => {
+  if (!dateVal || dateVal.trim() === '') return '';
+  const trimmed = dateVal.trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(trimmed)) {
+    return trimmed;
   }
-  const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return `"${dateVal}"`;
-  return `"${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}"`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) {
+    return trimmed.slice(0, 16).replace('T', ' ');
+  }
+  const d = new Date(trimmed);
+  if (isNaN(d.getTime())) return trimmed;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
 /**
- * Returns unquoted title-cased status string matching EezySend report template:
- * - Awaiting Collection
- * - Reversed
- * - Collected
+ * Formats Amount with decimal: e.g. 20.0, 350.0, 120.5
  */
+export const formatExportAmount = (amount?: number | string | null): string => {
+  if (amount === null || amount === undefined || amount === '') return '0.0';
+  const num = Number(amount);
+  if (isNaN(num)) return String(amount);
+  const str = String(amount).trim();
+  return str.includes('.') ? str : `${str}.0`;
+};
+
+/**
+ * Formats Charge with 2 decimals: e.g. 0.00, 7.00, 3.50
+ */
+export const formatExportCharge = (charge?: number | string | null): string => {
+  if (charge === null || charge === undefined || charge === '') return '0.00';
+  const num = Number(charge);
+  if (!isNaN(num)) {
+    return num.toFixed(2);
+  }
+  return String(charge);
+};
+
+/**
+ * Formats Tax: e.g. 0.0, 0.7, 1.0
+ */
+export const formatExportTax = (tax?: number | string | null): string => {
+  if (tax === null || tax === undefined || tax === '') return '0.0';
+  const num = Number(tax);
+  if (isNaN(num)) return String(tax);
+  const str = String(tax).trim();
+  return str.includes('.') ? str : `${str}.0`;
+};
+
+/**
+ * Formats Narrative: e.g. AWAITING_COLLECTION, COLLECTED, REVERSED, or custom narrative
+ */
+export const formatExportNarrative = (narrative?: string, dateCollected?: string | null, status?: boolean): string => {
+  if (narrative && narrative.trim() !== '') return narrative.trim();
+  if (status === false) return 'REVERSED';
+  if (dateCollected) return 'COLLECTED';
+  return 'AWAITING_COLLECTION';
+};
+
+// Legacy alias helpers maintained for backwards compatibility
+export const formatCSVDate = formatExportDate;
 export const formatCSVStatus = (narrative?: string, dateCollected?: string | null): string => {
   const n = (narrative || '').toUpperCase();
   if (n.includes('REVERSED')) return 'Reversed';
   if (dateCollected || n.includes('COLLECTED')) return 'Collected';
   return 'Awaiting Collection';
 };
-
-/**
- * Formats Fee without quotes: e.g. 5.00, 2.00, 3, 0.00, 0
- */
-export const formatCSVFee = (charge?: string | number | null): string => {
-  if (charge === null || charge === undefined || charge === '') return '0.00';
-  return String(charge).trim();
-};
-
-/**
- * Formats Amount without quotes: e.g. 350.74, 96, 10
- */
-export const formatCSVAmount = (amount?: number | string | null): string | number => {
-  if (amount === null || amount === undefined || amount === '') return 0;
-  return amount;
-};
-
-/**
- * Formats full name with middle name inside double quotes with quote-escaping.
- * Example: "NIALL IGOE", "Faston David Vonganai Murimirwa"
- */
+export const formatCSVFee = formatExportCharge;
+export const formatCSVAmount = formatExportAmount;
 export const formatCSVName = (first?: string, middle?: string, last?: string): string => {
-  const parts = [first, middle, last].filter((p): p is string => typeof p === 'string' && p !== '');
-  if (parts.length === 0) return '""';
-  if (parts.length === 1) return `"${parts[0].replace(/"/g, '""')}"`;
-  const cleanedParts = parts.map(p => p.trim()).filter(Boolean);
-  const name = cleanedParts.length > 0 ? cleanedParts.join(' ') : parts.join(' ');
-  return `"${name.replace(/"/g, '""')}"`;
+  return [first, middle, last].filter(Boolean).join(' ').trim();
 };
 
 /**
- * Generates CSV string matching the exact EezySend remittance report template:
- * Header: Reference,Date,Status,Amount,Currency,Fee,Sender,Receiver,Sender Branch,Payout Branch
+ * Escapes XML/HTML characters
+ */
+const escapeHtml = (val: unknown): string => {
+  const str = String(val ?? '');
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+};
+
+/**
+ * Extracts the 25 values for a transaction matching exact column specification
+ */
+export const getTransactionRowValues = (t: ReportTransaction): (string | number)[] => [
+  t.transactionReference || '',
+  t.internalReferenceID || '',
+  t.withdrawalReference || '',
+  formatExportAmount(t.amount),
+  formatExportCharge(t.charge),
+  t.currency || 'USD',
+  formatExportDate(t.dateCreated),
+  formatExportDate(t.dateCollected),
+  formatExportNarrative(t.narrative, t.dateCollected, t.status),
+  t.receiverAddress || '',
+  t.receiverBranch || '',
+  t.receiverFirstName || '',
+  t.receiverLastName || '',
+  t.receiverNationalId || '',
+  t.receiverPhone || '',
+  t.receiverTown || '',
+  t.senderAddress || '',
+  t.senderBranch || '',
+  t.senderFirstName || '',
+  t.senderLastName || '',
+  t.senderNationalId || '',
+  t.senderPhone || '',
+  t.senderTown || '',
+  formatExportTax(t.tax),
+  t.channel || ''
+];
+
+/**
+ * Generates CSV string matching the exact 25-column specification:
+ * Header: EezySend Reference ID,T24 Deposit Reference ID,T24 Withdrawal Reference ID,Amount,Charge,Currency,Date Created,Date Collected,Narrative,Receiver Address,Receiver Branch,Receiver Firstname,Receiver Lastname,Receiver National ID,Receiver Phone,Receiver Town,Sender Address,Sender Branch,Sender Firstname,Sender Lastname,Sender National ID,Sender Phone,Sender Town,Tax,Channel
  */
 export const generateTransactionsCSV = (transactions: ReportTransaction[]): string => {
-  const headers = [
-    "Reference",
-    "Date",
-    "Status",
-    "Amount",
-    "Currency",
-    "Fee",
-    "Sender",
-    "Receiver",
-    "Sender Branch",
-    "Payout Branch"
-  ];
+  const headers = TRANSACTION_EXPORT_HEADERS;
 
-  const rows = transactions.map(t => [
-    `"${(t.transactionReference || '').replace(/"/g, '""')}"`,
-    formatCSVDate(t.dateCreated),
-    formatCSVStatus(t.narrative, t.dateCollected),
-    formatCSVAmount(t.amount),
-    `"${(t.currency || 'USD').replace(/"/g, '""')}"`,
-    formatCSVFee(t.charge),
-    formatCSVName(t.senderFirstName, t.senderMiddleName, t.senderLastName),
-    formatCSVName(t.receiverFirstName, t.receiverMiddleName, t.receiverLastName),
-    `"${(t.senderBranch || '').replace(/"/g, '""')}"`,
-    `"${(t.receiverBranch || '').replace(/"/g, '""')}"`
-  ]);
+  const rows = transactions.map(t => {
+    const values = getTransactionRowValues(t);
+    return values.map(val => {
+      const s = String(val ?? '');
+      if (/[",\r\n]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    }).join(',');
+  });
 
-  return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  return [headers.join(','), ...rows].join('\r\n');
+};
+
+/**
+ * Generates an Excel Workbook (.xlsx) with:
+ * 1. Column headings formatted in BOLD
+ * 2. Multi-sheet pagination (at most 50 rows per sheet)
+ * 3. Informative, clean sheet names: e.g. "Page 1 (1-50)", "Page 2 (51-100)", "Page 3 (101-125)"
+ * 4. Clean white background (NO blue headers) with subtle borders
+ * 5. String formatting for phone numbers and IDs to preserve leading zeroes
+ */
+export const generateTransactionsWorkbook = async (
+  transactions: ReportTransaction[],
+  pageSize: number = 50
+): Promise<Uint8Array> => {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'EezySend Financial Operations';
+  wb.created = new Date();
+
+  const total = transactions.length;
+  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
+  for (let i = 0; i < totalPages; i++) {
+    const startIdx = i * pageSize;
+    const endIdx = Math.min((i + 1) * pageSize, total);
+    const pageTransactions = total > 0 ? transactions.slice(startIdx, endIdx) : [];
+
+    // Simple, informative sheet name: e.g. "Page 1 (1-50)", "Page 2 (51-100)"
+    const sheetName = total > 0 ? `Page ${i + 1} (${startIdx + 1}-${endIdx})` : 'Page 1 (0 records)';
+    const ws = wb.addWorksheet(sheetName, {
+      views: [{ showGridLines: true }]
+    });
+
+    // Row 1: The 25 column headers in BOLD
+    const headerRow = ws.addRow([...TRANSACTION_EXPORT_HEADERS]);
+    headerRow.height = 24;
+
+    headerRow.eachCell((cell) => {
+      cell.font = {
+        name: 'Calibri',
+        size: 11,
+        bold: true, // Column heading is BOLD!
+        color: { argb: 'FF000000' }
+      };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFFFFF' } // Clean white background (NO blue headers)
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'left'
+      };
+    });
+
+    // Rows 2..N: Data rows
+    pageTransactions.forEach(t => {
+      const rowValues = getTransactionRowValues(t);
+      const dataRow = ws.addRow(rowValues);
+      dataRow.height = 20;
+
+      dataRow.eachCell((cell) => {
+        cell.font = {
+          name: 'Calibri',
+          size: 11,
+          color: { argb: 'FF000000' }
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: 'left'
+        };
+        cell.numFmt = '@'; // Force text format to preserve leading zeroes
+      });
+    });
+
+    // Auto-fit column widths
+    ws.columns.forEach((column, colIdx) => {
+      let maxLen = TRANSACTION_EXPORT_HEADERS[colIdx]?.length || 15;
+      pageTransactions.forEach(t => {
+        const val = String(getTransactionRowValues(t)[colIdx] ?? '');
+        if (val.length > maxLen) {
+          maxLen = Math.min(val.length, 36);
+        }
+      });
+      column.width = Math.max(maxLen + 3, 14);
+    });
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  return new Uint8Array(buffer);
 };
 
 /**
@@ -116,65 +329,13 @@ export const downloadCSV = (csvContent: string, filename: string): void => {
 };
 
 /**
- * Generates an Excel XLS (HTML XML Workbook) table
+ * Triggers a browser download of the XLSX workbook
  */
-export const generateTransactionsXLS = (transactions: ReportTransaction[]): string => {
-  const headers = [
-    "Reference", "Date", "Status", "Amount", "Currency", "Fee", "Sender", "Receiver", "Sender Branch", "Payout Branch"
-  ];
-  
-  const headerHtml = headers.map(h => `<th style="background-color:#0A3E94;color:#ffffff;font-weight:bold;border:1px solid #cbd5e1;padding:8px 12px;font-family:sans-serif;">${h}</th>`).join("");
-  
-  const rowsHtml = transactions.map(t => {
-    const cols = [
-      t.transactionReference || '',
-      formatCSVDate(t.dateCreated).replace(/"/g, ''),
-      formatCSVStatus(t.narrative, t.dateCollected),
-      t.amount ?? 0,
-      t.currency || 'USD',
-      formatCSVFee(t.charge),
-      formatCSVName(t.senderFirstName, t.senderMiddleName, t.senderLastName).replace(/"/g, ''),
-      formatCSVName(t.receiverFirstName, t.receiverMiddleName, t.receiverLastName).replace(/"/g, ''),
-      t.senderBranch || '',
-      t.receiverBranch || ''
-    ];
-    return `<tr>${cols.map(c => `<td style="border:1px solid #e2e8f0;padding:6px 10px;font-family:sans-serif;">${c}</td>`).join("")}</tr>`;
-  }).join("");
-
-  return `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <!--[if gte mso 9]>
-    <xml>
-      <x:ExcelWorkbook>
-        <x:ExcelWorksheets>
-          <x:ExcelWorksheet>
-            <x:Name>Remittance Report</x:Name>
-            <x:WorksheetOptions>
-              <x:DisplayGridlines/>
-            </x:WorksheetOptions>
-          </x:ExcelWorksheet>
-        </x:ExcelWorksheets>
-      </x:ExcelWorkbook>
-    </xml>
-    <![endif]-->
-  </head>
-  <body>
-    <table>
-      <thead><tr>${headerHtml}</tr></thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  </body>
-</html>`.trim();
-};
-
-/**
- * Triggers a browser download of the XLS workbook
- */
-export const downloadXLS = (xlsContent: string, filename: string): void => {
-  const safeFilename = filename.endsWith('.xls') ? filename : `${filename}.xls`;
-  const blob = new Blob([xlsContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
+export const downloadXLSX = (workbookBuffer: Uint8Array, filename: string): void => {
+  const safeFilename = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+  const blob = new Blob([workbookBuffer as BlobPart], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.style.display = "none";
@@ -192,13 +353,65 @@ export const downloadXLS = (xlsContent: string, filename: string): void => {
 };
 
 /**
+ * Legacy HTML XLS generation with bold headers
+ */
+export const generateTransactionsXLS = (transactions: ReportTransaction[]): string => {
+  const headers = TRANSACTION_EXPORT_HEADERS;
+  
+  const headerHtml = headers
+    .map(h => `<th style="background-color:#ffffff;color:#000000;font-weight:bold;border:1px solid #d1d5db;padding:6px 10px;text-align:left;font-family:Calibri,Arial,sans-serif;font-size:11pt;white-space:nowrap;">${escapeHtml(h)}</th>`)
+    .join('');
+  
+  const rowsHtml = transactions.map(t => {
+    const values = getTransactionRowValues(t);
+    const tds = values.map(val => {
+      return `<td style="background-color:#ffffff;color:#000000;border:1px solid #d1d5db;padding:4px 8px;font-family:Calibri,Arial,sans-serif;font-size:11pt;text-align:left;white-space:nowrap;mso-number-format:'\\@';">${escapeHtml(val)}</td>`;
+    }).join('');
+
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  return `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <!--[if gte mso 9]>
+    <xml>
+      <x:ExcelWorkbook>
+        <x:ExcelWorksheets>
+          <x:ExcelWorksheet>
+            <x:Name>Page 1 (1-${Math.min(transactions.length, 50)})</x:Name>
+            <x:WorksheetOptions>
+              <x:DisplayGridlines/>
+            </x:WorksheetOptions>
+          </x:ExcelWorksheet>
+        </x:ExcelWorksheets>
+      </x:ExcelWorkbook>
+    </xml>
+    <![endif]-->
+    <style>
+      table { border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+      th { font-weight: bold; background-color: #ffffff; color: #000000; border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; }
+      td { background-color: #ffffff; color: #000000; border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; mso-number-format: '\\@'; }
+    </style>
+  </head>
+  <body>
+    <table>
+      <thead><tr>${headerHtml}</tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  </body>
+</html>`.trim();
+};
+
+/**
  * Triggers a native HTTP download via the server /api/export endpoint.
  * This guarantees the browser's download manager receives standard
- * Content-Disposition headers and sets the exact filename and .csv / .xls extension.
+ * Content-Disposition headers and sets the exact filename and .csv / .xlsx / .xls extension.
  */
 export const downloadViaHttp = (
   data: unknown,
-  format: 'csv' | 'xls',
+  format: 'csv' | 'xls' | 'xlsx',
   filename: string,
   type: 'transactions' | 'sms' = 'transactions'
 ): void => {
