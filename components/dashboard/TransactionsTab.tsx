@@ -19,6 +19,7 @@ import type { ReportTransaction, ReversalResponse } from "@/lib/types";
 import { TransactionFullView } from "./TransactionFullView";
 import { useToast } from "@/components/ui/Toast";
 import { TableSkeleton } from "@/components/ui/LoadingSpinner";
+import InstitutionalLoading from "@/components/ui/InstitutionalLoading";
 import { KpiCard, KpiGrid } from "./KpiCard";
 import { Pagination } from "./Pagination";
 import { DateFilterDropdown } from "./DateFilterDropdown";
@@ -41,26 +42,35 @@ export default function TransactionsTab() {
   const [pageSize, setPageSize] = useState<number>(50);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
-  // Transactions data
-  const [transactions, setTransactions] = useState<ReportTransaction[]>(mockReportTransactions);
+  // Transactions data (starts empty with loading=true to prevent rendering any sample data)
+  const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [initialLoaded, setInitialLoaded] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Load live transactions on mount
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const data = await reportsApi.getAllTransactions();
-        if (Array.isArray(data) && data.length > 0) {
-          setTransactions(data);
-        }
-      } catch {
-        // Keep fallback
-      } finally {
-        setLoading(false);
+  // Load live transactions directly on mount
+  const loadData = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await reportsApi.getAllTransactions();
+      if (Array.isArray(data)) {
+        setTransactions(data);
+      } else {
+        setTransactions([]);
       }
-    };
+    } catch (err: unknown) {
+      console.error("Live transactions load error:", err);
+      setLoadError(err instanceof Error ? err.message : "Failed to load live transactions from core banking feed.");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+      setInitialLoaded(true);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
 
@@ -381,6 +391,18 @@ export default function TransactionsTab() {
         </div>
       </div>
 
+      {loading && !initialLoaded ? (
+        <InstitutionalLoading
+          variant="page"
+          title="Synchronizing Live Transactions"
+          subtitle="Connecting to EezySend Core Banking feed. Verifying real-time escrow, disbursement, and settlement states..."
+          badgeText="LIVE CORE BANKING FEED"
+          error={loadError}
+          onRetry={loadData}
+        />
+      ) : (
+        <>
+
       {/* 2. Key Metrics: Shared Responsive Grid & Cards */}
       <KpiGrid>
         <KpiCard
@@ -519,8 +541,13 @@ export default function TransactionsTab() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-0">
-                    <TableSkeleton rows={8} />
+                  <td colSpan={6} className="py-12 px-4 text-center">
+                    <InstitutionalLoading
+                      variant="inline"
+                      title="Updating Live Records"
+                      subtitle="Fetching live settlement transactions from core banking feed..."
+                      badgeText="SYNCHRONIZING FEED"
+                    />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -657,6 +684,8 @@ export default function TransactionsTab() {
         onPageChange={setCurrentPage}
         onPageSizeChange={setPageSize}
       />
+      </>
+      )}
 
       {/* Reversal Confirmation Dialog */}
       {reversalModalContent}

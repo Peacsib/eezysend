@@ -191,68 +191,80 @@ export const reportsApi = {
       activeToken = (await ensureLiveToken()) || undefined;
     }
     if (!activeToken && !hasLiveAuthToken()) {
-      return mockReportTransactions;
+      return [];
     }
     try {
       const data = await api.get<ReportTransaction[]>('/report/alltransactions/', activeToken);
       if (Array.isArray(data) && data.length > 0) return data;
-      return mockReportTransactions;
+      return [];
     } catch {
-      return mockReportTransactions;
+      return [];
     }
   },
 
   // GET /report/alltransactionsByDate/?startDate={startDate}&endDate={endDate}
   getTransactionsByDate: async (params: ReportDateParams, token?: string): Promise<ReportTransaction[]> => {
-    if (!token && !hasLiveAuthToken()) {
-      return mockReportTransactions;
+    let activeToken = token;
+    if (!activeToken && !hasLiveAuthToken()) {
+      activeToken = (await ensureLiveToken()) || undefined;
+    }
+    if (!activeToken && !hasLiveAuthToken()) {
+      return [];
     }
     try {
       const query = new URLSearchParams({
         startDate: params.startDate,
         endDate: params.endDate,
       }).toString();
-      const data = await api.get<ReportTransaction[]>(`/report/alltransactionsByDate/?${query}`, token);
+      const data = await api.get<ReportTransaction[]>(`/report/alltransactionsByDate/?${query}`, activeToken);
       if (Array.isArray(data) && data.length > 0) return data;
-      return mockReportTransactions;
+      return [];
     } catch {
-      return mockReportTransactions;
+      return [];
     }
   },
 
   // GET /report/deposits/?startDate={startDate}&endDate={endDate}
   getDeposits: async (params: ReportDateParams, token?: string): Promise<ReportTransaction[]> => {
-    if (!token && !hasLiveAuthToken()) {
-      return mockReportTransactions.filter(t => t.transactionType?.toUpperCase() === 'DEPOSIT');
+    let activeToken = token;
+    if (!activeToken && !hasLiveAuthToken()) {
+      activeToken = (await ensureLiveToken()) || undefined;
+    }
+    if (!activeToken && !hasLiveAuthToken()) {
+      return [];
     }
     try {
       const query = new URLSearchParams({
         startDate: params.startDate,
         endDate: params.endDate,
       }).toString();
-      const data = await api.get<ReportTransaction[]>(`/report/deposits/?${query}`, token);
+      const data = await api.get<ReportTransaction[]>(`/report/deposits/?${query}`, activeToken);
       if (Array.isArray(data) && data.length > 0) return data;
-      return mockReportTransactions.filter(t => t.transactionType?.toUpperCase() === 'DEPOSIT');
+      return [];
     } catch {
-      return mockReportTransactions.filter(t => t.transactionType?.toUpperCase() === 'DEPOSIT');
+      return [];
     }
   },
 
   // GET /report/withdrawals/?startDate={startDate}&endDate={endDate}
   getWithdrawals: async (params: ReportDateParams, token?: string): Promise<ReportTransaction[]> => {
-    if (!token && !hasLiveAuthToken()) {
-      return mockReportTransactions.filter(t => t.transactionType?.toUpperCase() === 'WITHDRAWAL');
+    let activeToken = token;
+    if (!activeToken && !hasLiveAuthToken()) {
+      activeToken = (await ensureLiveToken()) || undefined;
+    }
+    if (!activeToken && !hasLiveAuthToken()) {
+      return [];
     }
     try {
       const query = new URLSearchParams({
         startDate: params.startDate,
         endDate: params.endDate,
       }).toString();
-      const data = await api.get<ReportTransaction[]>(`/report/withdrawals/?${query}`, token);
+      const data = await api.get<ReportTransaction[]>(`/report/withdrawals/?${query}`, activeToken);
       if (Array.isArray(data) && data.length > 0) return data;
-      return mockReportTransactions.filter(t => t.transactionType?.toUpperCase() === 'WITHDRAWAL');
+      return [];
     } catch {
-      return mockReportTransactions.filter(t => t.transactionType?.toUpperCase() === 'WITHDRAWAL');
+      return [];
     }
   },
 
@@ -591,14 +603,14 @@ export const smsApi = {
       }
     }
     return {
-      content: mockSMSList,
-      totalElements: mockSMSList.length,
-      totalPages: 1,
+      content: [],
+      totalElements: 0,
+      totalPages: 0,
       size,
       number: page,
       first: page === 0,
       last: true,
-      empty: mockSMSList.length === 0,
+      empty: true,
     };
   },
 

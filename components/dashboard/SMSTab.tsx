@@ -19,10 +19,11 @@ import {
   RefreshCw,
   SearchX,
 } from "lucide-react";
-import { smsApi, transactionsApi, mockSMSList, mockReportTransactions } from "@/lib/api";
+import { smsApi, transactionsApi } from "@/lib/api";
 import type { SMSModel, ReportTransaction } from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
 import { TableSkeleton } from "@/components/ui/LoadingSpinner";
+import InstitutionalLoading from "@/components/ui/InstitutionalLoading";
 import { downloadViaHttp } from "@/lib/csvExport";
 import { KpiCard, KpiGrid } from "./KpiCard";
 import { Pagination } from "./Pagination";
@@ -45,26 +46,35 @@ export default function SMSTab() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
 
-  // Data state
-  const [smsList, setSmsList] = useState<SMSModel[]>(mockSMSList);
+  // Data state (starts empty with loading=true to prevent rendering sample data)
+  const [smsList, setSmsList] = useState<SMSModel[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [initialLoaded, setInitialLoaded] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Load live SMS logs on mount
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const pageData = await smsApi.getAllSMS(0, 2500);
-        if (pageData && Array.isArray(pageData.content) && pageData.content.length > 0) {
-          setSmsList(pageData.content);
-        }
-      } catch {
-        // Keep fallback
-      } finally {
-        setLoading(false);
+  // Load live SMS logs directly on mount
+  const loadData = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const pageData = await smsApi.getAllSMS(0, 2500);
+      if (pageData && Array.isArray(pageData.content)) {
+        setSmsList(pageData.content);
+      } else {
+        setSmsList([]);
       }
-    };
+    } catch (err: unknown) {
+      console.error("Live SMS load error:", err);
+      setLoadError(err instanceof Error ? err.message : "Failed to load live SMS logs from gateway.");
+      setSmsList([]);
+    } finally {
+      setLoading(false);
+      setInitialLoaded(true);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
   
@@ -83,22 +93,12 @@ export default function SMSTab() {
     setTimeout(() => setCopiedText(null), 2000);
   };
 
-  // Find linked remittance transaction for richer message preview
-  const linkedTx = useMemo<ReportTransaction | undefined>(() => {
-    if (!selectedSMS) return undefined;
-    return mockReportTransactions.find(t => t.transactionReference === selectedSMS.transactionReference);
-  }, [selectedSMS]);
-
+  // Find live linked remittance transaction for richer message preview
   const [liveLinkedTx, setLiveLinkedTx] = useState<ReportTransaction | null>(null);
 
   useEffect(() => {
     if (!selectedSMS) {
       setLiveLinkedTx(null);
-      return;
-    }
-    const mock = mockReportTransactions.find(t => t.transactionReference === selectedSMS.transactionReference);
-    if (mock) {
-      setLiveLinkedTx(mock);
       return;
     }
     let isCancelled = false;
@@ -108,7 +108,9 @@ export default function SMSTab() {
           setLiveLinkedTx(tx);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!isCancelled) setLiveLinkedTx(null);
+      });
 
     return () => {
       isCancelled = true;
@@ -252,7 +254,7 @@ export default function SMSTab() {
     return (
       <SMSFullView
         sms={selectedSMS}
-        linkedTx={liveLinkedTx || linkedTx}
+        linkedTx={liveLinkedTx || undefined}
         onBack={() => setSelectedSMS(null)}
         onResend={(txRef) => handleResend(txRef)}
         isResending={!!resendingMap[selectedSMS.transactionReference]}
@@ -283,6 +285,18 @@ export default function SMSTab() {
           </button>
         </div>
       </div>
+
+      {loading && !initialLoaded ? (
+        <InstitutionalLoading
+          variant="page"
+          title="Connecting to SMS Gateway Logs"
+          subtitle="Synchronizing live carrier transmission receipts, delivery statuses, and dispatch queues..."
+          badgeText="LIVE SMS GATEWAY FEED"
+          error={loadError}
+          onRetry={loadData}
+        />
+      ) : (
+        <>
 
       {/* 2. Key Metrics: Shared Responsive Grid & Cards */}
       <KpiGrid>
@@ -412,8 +426,13 @@ export default function SMSTab() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="p-0">
-                    <TableSkeleton rows={8} />
+                  <td colSpan={5} className="py-12 px-4 text-center">
+                    <InstitutionalLoading
+                      variant="inline"
+                      title="Updating SMS Logs"
+                      subtitle="Fetching live carrier delivery logs from gateway..."
+                      badgeText="SYNCHRONIZING FEED"
+                    />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -549,6 +568,8 @@ export default function SMSTab() {
         onPageChange={setCurrentPage}
         onPageSizeChange={setPageSize}
       />
+      </>
+      )}
     </div>
   );
 }

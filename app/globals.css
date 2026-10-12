@@ -50,6 +50,60 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Inter', system-ui, sans-serif;
 }
 
+@keyframes spinReverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes pulseDottedRing {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes dottedWave {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-7px);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmerGlow {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@utility animate-spin-reverse {
+  animation: spinReverse 5s linear infinite;
+}
+
+@utility animate-dotted-ring {
+  animation: pulseDottedRing 2.8s ease-in-out infinite;
+}
+
+@utility animate-shimmer {
+  background: linear-gradient(90deg, rgba(10,62,148,0.06) 0%, rgba(10,62,148,0.25) 50%, rgba(10,62,148,0.06) 100%);
+  background-size: 200% 100%;
+  animation: shimmerGlow 2.2s infinite;
+}
+
 
 
 @media print {

@@ -12,11 +12,12 @@ import {
   X,
   SearchX,
 } from "lucide-react";
-import { reportsApi, mockReportTransactions } from "@/lib/api";
+import { reportsApi } from "@/lib/api";
 import type { ReportTransaction } from "@/lib/types";
 import { TransactionFullView } from "./TransactionFullView";
 import { useToast } from "@/components/ui/Toast";
 import { LoadingSpinner, TableSkeleton } from "@/components/ui/LoadingSpinner";
+import InstitutionalLoading from "@/components/ui/InstitutionalLoading";
 import { KpiCard, KpiGrid } from "./KpiCard";
 import { Pagination } from "./Pagination";
 import { DateFilterDropdown } from "./DateFilterDropdown";
@@ -47,39 +48,35 @@ export default function ReportsTab() {
   const [pageSize, setPageSize] = useState<number>(50);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
-  // Data & loading
-  const [transactions, setTransactions] = useState<ReportTransaction[]>(mockReportTransactions);
-  const [loading, setLoading] = useState<boolean>(false);
+  // Data & loading (starts empty and loading=true to prevent rendering any sample data)
+  const [transactions, setTransactions] = useState<ReportTransaction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [initialLoaded, setInitialLoaded] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Selected item for drawer
   const [selectedTx, setSelectedTx] = useState<ReportTransaction | null>(null);
 
-  // Fetch report data
+  // Fetch live report data directly from EezySend Core Banking feed
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await reportsApi.getAllTransactions();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setTransactions(data);
       } else {
-        filterMock();
+        setTransactions([]);
       }
-    } catch {
-      filterMock();
+    } catch (err: unknown) {
+      console.error("Live report fetch error:", err);
+      setLoadError(err instanceof Error ? err.message : "Failed to connect to live core banking feed.");
+      setTransactions([]);
     } finally {
       setLoading(false);
+      setInitialLoaded(true);
     }
-  };
-
-  const filterMock = () => {
-    let list = [...mockReportTransactions];
-    if (filterType === 'deposits') {
-      list = list.filter(t => t.transactionType?.toUpperCase() === 'DEPOSIT');
-    } else if (filterType === 'withdrawals') {
-      list = list.filter(t => t.transactionType?.toUpperCase() === 'WITHDRAWAL');
-    }
-    setTransactions(list);
   };
 
   useEffect(() => {
@@ -292,6 +289,18 @@ export default function ReportsTab() {
         </div>
       </div>
 
+      {loading && !initialLoaded ? (
+        <InstitutionalLoading
+          variant="page"
+          title="Synchronizing Live Remittance Reports"
+          subtitle="Establishing secure link with EezySend Core Banking cluster. Loading live settlement records..."
+          badgeText="LIVE CORE BANKING FEED"
+          error={loadError}
+          onRetry={loadData}
+        />
+      ) : (
+        <>
+
       {/* 2. Key Metrics: Shared Responsive Grid & Cards */}
       <KpiGrid>
         <KpiCard
@@ -426,8 +435,13 @@ export default function ReportsTab() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-0">
-                    <TableSkeleton rows={8} />
+                  <td colSpan={6} className="py-12 px-4 text-center">
+                    <InstitutionalLoading
+                      variant="inline"
+                      title="Updating Live Records"
+                      subtitle="Fetching live settlement transactions from core banking feed..."
+                      badgeText="SYNCHRONIZING FEED"
+                    />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -546,6 +560,8 @@ export default function ReportsTab() {
         onPageSizeChange={setPageSize}
       />
       </div>
+      </>
+      )}
     </div>
   );
 }
