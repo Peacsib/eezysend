@@ -381,28 +381,14 @@ export function InteractivePerformanceChart({
                   />
                 )}
 
-                {/* Selected pulse outer ring */}
-                {isSelected && (
+                {/* Subtle static outer halo on hover only */}
+                {isHovered && (
                   <circle
                     cx={p.x}
                     cy={p.y}
-                    r="8"
-                    fill="none"
-                    stroke="#16a34a"
-                    strokeWidth="1.5"
-                    opacity="0.75"
-                    className="animate-ping"
-                  />
-                )}
-
-                {/* Outer highlight ring on hover or selection */}
-                {(isHovered || isSelected) && (
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={isSelected ? "6.5" : "5.5"}
+                    r="6.5"
                     fill="#bbf7d0"
-                    opacity="0.8"
+                    opacity="0.7"
                   />
                 )}
 
