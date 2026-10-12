@@ -13,10 +13,13 @@ import {
   Smartphone,
   ShieldCheck,
   Radio,
-  Wifi
+  Wifi,
+  Eye,
+  X
 } from "lucide-react";
 import type { SMSModel, ReportTransaction } from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
+import SMSDispatchProofSlip from "./SMSDispatchProofSlip";
 
 interface SMSFullViewProps {
   readonly sms: SMSModel;
@@ -35,6 +38,7 @@ export function SMSFullView({
 }: SMSFullViewProps) {
   const { showToast } = useToast();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showProofPreview, setShowProofPreview] = useState(false);
 
   const handleCopy = (text: string, key: string) => {
     void navigator.clipboard.writeText(text);
@@ -78,64 +82,66 @@ export function SMSFullView({
   const senderSmsBody = `CABS EezySend: Remittance created successfully. Voucher ${sms.transactionReference} issued to ${beneficiaryNameText}. Funds reserved safely at CABS.`;
 
   return (
-    <div className="space-y-3.5 max-w-6xl mx-auto animate-in fade-in duration-150">
-      {/* 1. Official Slip Header (Print Only) */}
-      <div className="hidden print:block p-4 border-b border-slate-300 text-slate-900">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">EezySend SMS Gateway Dispatch Proof</h1>
-            <p className="text-xs text-slate-500">CABS Financial Operations</p>
-          </div>
-          <div className="text-right text-xs text-slate-600">
-            <p>Voucher: <span className="font-mono font-bold">{sms.transactionReference}</span></p>
-            <p>Printed: {new Date().toLocaleString()}</p>
-          </div>
-        </div>
+    <>
+      {/* 1. Official Slip Document (Visible ONLY in print / PDF save) */}
+      <div className="hidden print:block">
+        <SMSDispatchProofSlip sms={sms} linkedTx={linkedTx} />
       </div>
 
-      {/* 2. Top Navigation Bar - Calm, Minimalist */}
-      <div className="no-print flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 shadow-2xs transition-all active:scale-95 cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-slate-600" />
-            <span>Back to SMS Center</span>
-          </button>
+      {/* 2. Interactive Screen UI - Hidden completely during print */}
+      <div className="no-print space-y-3.5 max-w-6xl mx-auto animate-in fade-in duration-150">
+        {/* Top Navigation Bar - Calm, Minimalist */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 shadow-2xs transition-all active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-600" />
+              <span>Back to SMS Center</span>
+            </button>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
-            <span>/</span>
-            <span className="text-slate-500">Gateway Dispatch</span>
-            <span>/</span>
-            <span className="font-mono text-slate-800 font-semibold">{sms.transactionReference}</span>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
+              <span>/</span>
+              <span className="text-slate-500">Gateway Dispatch</span>
+              <span>/</span>
+              <span className="font-mono text-slate-800 font-semibold">{sms.transactionReference}</span>
+            </div>
+
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+              SMPP DISPATCHED
+            </span>
           </div>
 
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-            SMPP DISPATCHED
-          </span>
-        </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void onResend(sms.transactionReference)}
+              disabled={isResending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-xl transition-all border border-slate-200/80 shadow-2xs disabled:opacity-50 cursor-pointer active:scale-95"
+            >
+              <Send className={`w-3.5 h-3.5 text-slate-500 ${isResending ? 'animate-spin' : ''}`} />
+              <span>{isResending ? 'Sending...' : 'Resend SMS Alerts'}</span>
+            </button>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => void onResend(sms.transactionReference)}
-            disabled={isResending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-xl transition-all border border-slate-200/80 shadow-2xs disabled:opacity-50 cursor-pointer active:scale-95"
-          >
-            <Send className={`w-3.5 h-3.5 text-slate-500 ${isResending ? 'animate-spin' : ''}`} />
-            <span>{isResending ? 'Sending...' : 'Resend SMS Alerts'}</span>
-          </button>
+            <button
+              onClick={() => setShowProofPreview(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-xl transition-all border border-slate-200/80 shadow-2xs cursor-pointer active:scale-95"
+              title="Preview official CABS digital proof before printing"
+            >
+              <Eye className="w-3.5 h-3.5 text-slate-500" />
+              <span>Preview Proof</span>
+            </button>
 
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-xl transition-all border border-slate-200/80 shadow-2xs cursor-pointer active:scale-95"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>Print Dispatch Proof</span>
-          </button>
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-xl transition-all border border-slate-200/80 shadow-2xs cursor-pointer active:scale-95"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>Print Dispatch Proof</span>
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* 3. Hero Dispatch Overview - Calm & Clean */}
       <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs p-4 sm:p-5">
@@ -379,7 +385,57 @@ export function SMSFullView({
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+
+      {/* 3. Proof Preview Modal (On-Screen Digital Proof Inspection) */}
+      {showProofPreview && (
+        <div
+          className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowProofPreview(false);
+          }}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/80 bg-slate-50/70">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Printer className="w-4 h-4 text-[#0A3E94]" />
+                  SMS Gateway Dispatch Proof Preview
+                </h3>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">
+                  Ref: {sms.transactionReference} · Telco Delivery Handshake
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-eezysend-blue hover:bg-eezysend-blue-hover rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Proof</span>
+                </button>
+                <button
+                  onClick={() => setShowProofPreview(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                  title="Close Preview"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Scrollable Slip View */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/60">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2 sm:p-6 max-w-2xl mx-auto">
+                <SMSDispatchProofSlip sms={sms} linkedTx={linkedTx} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+
