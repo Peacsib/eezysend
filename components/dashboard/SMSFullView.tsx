@@ -79,7 +79,7 @@ export function SMSFullView({
 
   const recipientSmsBody = `CABS EezySend: You have received ${recipientAmountText} from ${senderNameText}. Collection Code: ${sms.transactionReference}. Present National ID at any CABS Branch to collect.`;
 
-  const senderSmsBody = `CABS EezySend: Remittance created successfully. Voucher ${sms.transactionReference} issued to ${beneficiaryNameText}. Funds reserved safely at CABS.`;
+  const senderSmsBody = `CABS EezySend: Remittance created successfully. Transaction ${sms.transactionReference} issued to ${beneficiaryNameText}. Funds reserved safely at CABS.`;
 
   return (
     <>
@@ -148,7 +148,7 @@ export function SMSFullView({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Voucher Reference
+              Transaction Reference
             </span>
 
             <div className="flex items-center gap-2">
@@ -156,11 +156,11 @@ export function SMSFullView({
                 {sms.transactionReference}
               </h2>
               <button
-                onClick={() => handleCopy(sms.transactionReference, 'Voucher Reference')}
+                onClick={() => handleCopy(sms.transactionReference, 'Transaction Reference')}
                 className="no-print p-1 text-slate-400 hover:text-slate-700 rounded transition-colors cursor-pointer"
                 title="Copy Reference"
               >
-                {copiedKey === 'Voucher Reference' ? (
+                {copiedKey === 'Transaction Reference' ? (
                   <Check className="w-3.5 h-3.5 text-slate-700" />
                 ) : (
                   <Copy className="w-3.5 h-3.5" />

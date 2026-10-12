@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import type { ReportTransaction } from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
-import VoucherPrintSlip from "./VoucherPrintSlip";
+import TransactionPrintSlip from "./TransactionPrintSlip";
 import StatusBadge from "@/components/ui/StatusBadge";
 
 interface TransactionFullViewProps {
@@ -50,7 +50,7 @@ export function TransactionFullView({
 
   const handlePrint = () => {
     const originalTitle = document.title;
-    document.title = `EezySend_Voucher_${transaction.transactionReference || 'Slip'}`;
+    document.title = `EezySend_Transaction_${transaction.transactionReference || 'Slip'}`;
     window.print();
     setTimeout(() => {
       document.title = originalTitle;
@@ -87,7 +87,7 @@ export function TransactionFullView({
     <>
       {/* 1. Official Slip Document (Visible ONLY in print / PDF save) */}
       <div className="hidden print:block">
-        <VoucherPrintSlip transaction={transaction} />
+        <TransactionPrintSlip transaction={transaction} />
       </div>
 
       {/* 2. Interactive Screen UI - Hidden completely during print */}
@@ -105,7 +105,7 @@ export function TransactionFullView({
 
             <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
               <span>/</span>
-              <span className="text-slate-500">Voucher</span>
+              <span className="text-slate-500">Transaction</span>
               <span>/</span>
               <span className="font-mono text-slate-800 font-semibold">{transaction.transactionReference}</span>
             </div>
@@ -123,7 +123,7 @@ export function TransactionFullView({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                <span>Reverse Voucher</span>
+                <span>Reverse Transaction</span>
               </button>
             )}
 
@@ -154,7 +154,7 @@ export function TransactionFullView({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Voucher Reference
+                Transaction Reference
               </span>
               <span className="px-1.5 py-0.2 rounded text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 uppercase">
                 {transaction.channel || 'BRANCH'}
@@ -166,11 +166,11 @@ export function TransactionFullView({
                 {transaction.transactionReference}
               </h2>
               <button
-                onClick={() => handleCopy(transaction.transactionReference, 'Voucher Reference')}
+                onClick={() => handleCopy(transaction.transactionReference, 'Transaction Reference')}
                 className="no-print p-1 text-slate-400 hover:text-slate-700 rounded transition-colors cursor-pointer"
                 title="Copy Reference"
               >
-                {copiedKey === 'Voucher Reference' ? (
+                {copiedKey === 'Transaction Reference' ? (
                   <Check className="w-3.5 h-3.5 text-slate-700" />
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
@@ -413,7 +413,7 @@ export function TransactionFullView({
       </div>
     </div>
 
-    {/* 3. Official Voucher Slip Preview Modal */}
+    {/* 3. Official Transaction Slip Preview Modal */}
     {showSlipPreview && (
         <div
           className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
@@ -430,7 +430,7 @@ export function TransactionFullView({
                   <Printer className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Official Voucher Slip Preview</h3>
+                  <h3 className="text-sm font-bold text-slate-900">Official Transaction Slip Preview</h3>
                   <p className="text-[11px] text-slate-500">Digital Stamp Proof of Remittance</p>
                 </div>
               </div>
@@ -456,7 +456,7 @@ export function TransactionFullView({
             {/* Modal Body - Scrollable authentic paper slip */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100">
               <div className="bg-white rounded-2xl shadow-md border border-slate-200/80 overflow-hidden max-w-2xl mx-auto">
-                <VoucherPrintSlip transaction={transaction} />
+                <TransactionPrintSlip transaction={transaction} />
               </div>
             </div>
           </div>

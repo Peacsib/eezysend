@@ -56,12 +56,12 @@ export default function SMSDispatchProofSlip({
     : 'SENGURAI MUSVIPA';
 
   const recipientSmsBody = `CABS EezySend: You have received ${recipientAmountText} from ${senderNameText}. Collection Code: ${sms.transactionReference}. Present National ID at any CABS Branch to collect.`;
-  const senderSmsBody = `CABS EezySend: Remittance created successfully. Voucher ${sms.transactionReference} issued to ${beneficiaryNameText}. Funds reserved safely at CABS.`;
+  const senderSmsBody = `CABS EezySend: Remittance created successfully. Transaction ${sms.transactionReference} issued to ${beneficiaryNameText}. Funds reserved safely at CABS.`;
 
   return (
     <div
       id={id}
-      className={`voucher-slip-container print-slip bg-white text-slate-900 p-8 sm:p-12 max-w-3xl mx-auto font-sans leading-relaxed ${className}`}
+      className={`transaction-slip-container voucher-slip-container print-slip bg-white text-slate-900 p-8 sm:p-12 max-w-3xl mx-auto font-sans leading-relaxed ${className}`}
       style={{
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
       }}
@@ -123,7 +123,7 @@ export default function SMSDispatchProofSlip({
       {/* 3. Core Dispatch Summary */}
       <div className="space-y-1.5 text-xs text-slate-800">
         <div className="grid grid-cols-[230px_1fr] sm:grid-cols-[260px_1fr] items-baseline">
-          <span className="text-slate-800 font-normal">Voucher Reference</span>
+          <span className="text-slate-800 font-normal">Transaction Reference</span>
           <span className="text-slate-900 font-mono font-bold">: {sms.transactionReference}</span>
         </div>
         <div className="grid grid-cols-[230px_1fr] sm:grid-cols-[260px_1fr] items-baseline">

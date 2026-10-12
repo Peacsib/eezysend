@@ -329,7 +329,7 @@ export const transactionsApi = {
     }
     return {
       status: true,
-      narration: `Voucher ${transactionReference} reversed successfully. Principal refunded to sender.`,
+      narration: `Transaction ${transactionReference} reversed successfully. Principal refunded to sender.`,
     };
   },
 };
@@ -744,7 +744,7 @@ export const defaultSubsystems: SubsystemHealth[] = [
     endpoint: "/eezysend/v3/api-docs",
     latencyMs: 118,
     lastChecked: "Live",
-    description: "Spring Boot microservice cluster handling voucher creation, escrows, and reversals",
+    description: "Spring Boot microservice cluster handling transaction creation, escrows, and reversals",
   },
   {
     id: "t24-connector",

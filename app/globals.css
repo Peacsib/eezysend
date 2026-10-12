@@ -71,11 +71,11 @@ h1, h2, h3, h4, h5, h6 {
     visibility: hidden;
   }
 
-  .print-slip, .print-slip *, .voucher-slip-container, .voucher-slip-container * {
+  .print-slip, .print-slip *, .transaction-slip-container, .transaction-slip-container *, .voucher-slip-container, .voucher-slip-container * {
     visibility: visible;
   }
 
-  .print-slip, .voucher-slip-container {
+  .print-slip, .transaction-slip-container, .voucher-slip-container {
     position: absolute;
     left: 0;
     top: 0;

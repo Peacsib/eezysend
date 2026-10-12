@@ -59,7 +59,7 @@ export const TRANSACTION_EXPORT_HEADERS = [
 ] as const;
 
 export const SMS_EXPORT_HEADERS = [
-  "Voucher Reference",
+  "Transaction Reference",
   "Date Dispatched",
   "Sender Phone",
   "Sender Status",

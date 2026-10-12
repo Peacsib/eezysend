@@ -118,7 +118,7 @@ export default function DashboardPage() {
         <main className="flex-1 p-4 sm:p-6 lg:p-8 md:overflow-y-auto max-w-7xl 2xl:max-w-[1600px] w-full mx-auto">
           {activeTab === 'reporting' && <ReportsTab />}
 
-          {/* Transactions Controller (Voucher status, T24 inquiries, and reversals) */}
+          {/* Transactions Controller (Transaction status, T24 inquiries, and reversals) */}
           {activeTab === 'transactions' && <TransactionsTab />}
 
           {/* SMS Controller (Gateway logs, status verification, and resend) */}

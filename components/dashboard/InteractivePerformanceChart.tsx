@@ -225,7 +225,7 @@ export function InteractivePerformanceChart({
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              Vouchers
+              Transactions
             </button>
             <button
               onClick={() => setMetricType("volume")}
@@ -442,7 +442,7 @@ export function InteractivePerformanceChart({
               <div className="text-xs font-bold text-white">
                 {metricType === "volume"
                   ? `$${points[hoveredIndex].volume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : `${points[hoveredIndex].count} vouchers`}
+                  : `${points[hoveredIndex].count} transactions`}
               </div>
             </div>
           </div>

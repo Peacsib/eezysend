@@ -415,7 +415,7 @@ export default function ReportsTab() {
           <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="bg-white/50 backdrop-blur-sm text-slate-500 font-semibold border-b border-slate-200/80 uppercase text-[11px] tracking-wider">
               <tr>
-                <th className="py-3.5 px-5">Voucher Reference</th>
+                <th className="py-3.5 px-5">Transaction Reference</th>
                 <th className="py-3.5 px-5">Sender</th>
                 <th className="py-3.5 px-5">Beneficiary</th>
                 <th className="py-3.5 px-5 text-right">Amount</th>
@@ -437,7 +437,7 @@ export default function ReportsTab() {
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200/80">
                         <SearchX className="w-6 h-6" />
                       </div>
-                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No remittance vouchers found</h3>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No remittance transactions found</h3>
                       <p className="text-xs text-slate-500 mb-4">
                         {searchQuery
                           ? `No records match "${searchQuery}".`

@@ -113,9 +113,9 @@ export default function TransactionsTab() {
     try {
       showToast('Processing reversal...', 'info');
       const res: ReversalResponse = await transactionsApi.reverseTransaction(reversalTarget.transactionReference);
-      showToast(res.narration || `Voucher ${reversalTarget.transactionReference} reversed successfully`, 'success');
+      showToast(res.narration || `Transaction ${reversalTarget.transactionReference} reversed successfully`, 'success');
     } catch {
-      showToast(`Voucher ${reversalTarget.transactionReference} marked as reversed`, 'success');
+      showToast(`Transaction ${reversalTarget.transactionReference} marked as reversed`, 'success');
     } finally {
       setReversalLoading(false);
 
@@ -266,11 +266,11 @@ export default function TransactionsTab() {
 
         <div>
           <h3 className="text-base font-bold text-slate-900">
-            Confirm Voucher Reversal
+            Confirm Transaction Reversal
           </h3>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            You are about to cancel voucher <span className="font-mono font-bold text-slate-800">{reversalTarget.transactionReference}</span>.
-            The voucher amount of <span className="font-bold text-slate-900">{reversalTarget.currency === 'USD' ? '$' : ''}{reversalTarget.amount} {reversalTarget.currency}</span> will be released back to the sender ({reversalTarget.senderFirstName} {reversalTarget.senderLastName}).
+            You are about to cancel transaction <span className="font-mono font-bold text-slate-800">{reversalTarget.transactionReference}</span>.
+            The transaction amount of <span className="font-bold text-slate-900">{reversalTarget.currency === 'USD' ? '$' : ''}{reversalTarget.amount} {reversalTarget.currency}</span> will be released back to the sender ({reversalTarget.senderFirstName} {reversalTarget.senderLastName}).
           </p>
         </div>
 
@@ -322,7 +322,7 @@ export default function TransactionsTab() {
             Transactions &amp; Inquiries
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Search remittance vouchers, verify core banking references, and process reversals
+            Search remittance transactions, verify core banking references, and process reversals
           </p>
         </div>
 
@@ -386,7 +386,7 @@ export default function TransactionsTab() {
         <KpiCard
           title="Total Remittance Volume"
           value={`$${metrics.usd.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-          subtitle={<span className="text-slate-500">{metrics.total} total vouchers registered</span>}
+          subtitle={<span className="text-slate-500">{metrics.total} total transactions registered</span>}
         />
 
         <KpiCard
@@ -426,7 +426,7 @@ export default function TransactionsTab() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All Vouchers
+            All Transactions
           </button>
           <button
             onClick={() => setFilterType('pending')}
@@ -466,7 +466,7 @@ export default function TransactionsTab() {
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search voucher reference, name, phone..."
+              placeholder="Search transaction reference, name, phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleDirectSearch()}
@@ -508,7 +508,7 @@ export default function TransactionsTab() {
           <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="bg-white/50 backdrop-blur-sm text-slate-500 font-semibold border-b border-slate-200/80 uppercase text-[11px] tracking-wider">
               <tr>
-                <th className="py-3.5 px-5">Voucher Reference</th>
+                <th className="py-3.5 px-5">Transaction Reference</th>
                 <th className="py-3.5 px-5">Sender</th>
                 <th className="py-3.5 px-5">Beneficiary</th>
                 <th className="py-3.5 px-5 text-right">Amount</th>
@@ -530,10 +530,10 @@ export default function TransactionsTab() {
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200/80">
                         <SearchX className="w-6 h-6" />
                       </div>
-                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No vouchers found</h3>
+                      <h3 className="text-sm font-semibold text-slate-800 mb-1">No transactions found</h3>
                       <p className="text-xs text-slate-500 mb-4">
                         {searchQuery
-                          ? `No voucher or reference matches "${searchQuery}".`
+                          ? `No transaction or reference matches "${searchQuery}".`
                           : "No records found matching the active filter criteria."}
                       </p>
                       {(searchQuery || filterType !== 'all') && (
@@ -645,7 +645,7 @@ export default function TransactionsTab() {
         {/* Footer info */}
         <div className="p-4 border-t border-white/30 flex items-center justify-between text-xs text-slate-400 bg-white/40 backdrop-blur-sm">
           <span>Total Filtered: {filtered.length} of {transactions.length} records</span>
-          <span>Click any transaction to view complete voucher lifecycle or print slip</span>
+          <span>Click any transaction to view complete transaction lifecycle or print slip</span>
         </div>
       </div>
 

@@ -147,7 +147,7 @@ export default function SMSTab() {
         }
 
         setResendingMap(prev => ({ ...prev, [txRef]: false }));
-        showToast(`Collection SMS re-dispatched successfully for voucher ${txRef}`, 'success');
+        showToast(`Collection SMS re-dispatched successfully for transaction ${txRef}`, 'success');
       }, 700);
     }
   };
@@ -269,7 +269,7 @@ export default function SMSTab() {
             SMS Notifications &amp; Delivery
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Audit SMS gateway transmission receipts and re-dispatch recipient voucher alerts
+            Audit SMS gateway transmission receipts and re-dispatch recipient transaction alerts
           </p>
         </div>
 
@@ -289,14 +289,14 @@ export default function SMSTab() {
         <KpiCard
           title="Total SMS Dispatched"
           value={metrics.total * 2}
-          unit={`alerts (${metrics.total} vouchers)`}
+          unit={`alerts (${metrics.total} transactions)`}
           subtitle={<span className="text-slate-500">Sender confirmation & beneficiary notifications</span>}
         />
 
         <KpiCard
           title="Delivered Successfully"
           value={metrics.deliveredCount}
-          unit="vouchers complete"
+          unit="transactions complete"
           subtitle={
             <div className="text-emerald-700 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-105 transition-transform duration-300" />
@@ -360,7 +360,7 @@ export default function SMSTab() {
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search voucher ref or phone (+263...)..."
+              placeholder="Search transaction ref or phone (+263...)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleDirectSearch()}
@@ -402,7 +402,7 @@ export default function SMSTab() {
           <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="bg-white/50 backdrop-blur-sm text-slate-500 font-semibold border-b border-slate-200/80 uppercase text-[11px] tracking-wider">
               <tr>
-                <th className="py-3.5 px-5">Voucher Reference</th>
+                <th className="py-3.5 px-5">Transaction Reference</th>
                 <th className="py-3.5 px-5">Sender Phone</th>
                 <th className="py-3.5 px-5">Beneficiary Phone</th>
                 <th className="py-3.5 px-5 text-center">Gateway Status</th>

@@ -15,7 +15,7 @@ A premium, secure financial remittance management system for CABS (Central Afric
 
 ### Use Case Example
 When Tendai in Harare sends $350 to Chipo in Bulawayo:
-1. Teller creates the remittance voucher in the system
+1. Teller creates the remittance transaction in the system
 2. EezySend generates a unique reference (e.g., `EZS-20261005-0981`)
 3. System sends SMS notification to beneficiary with pickup details
 4. Beneficiary collects cash at designated CABS branch
@@ -31,10 +31,10 @@ When Tendai in Harare sends $350 to Chipo in Bulawayo:
 
 **What You See**:
 - **Total Remittance Volume**: Sum of all money transfers (USD currency settled)
-- **Total Transactions**: Count of vouchers with success rate (collected vs total)
+- **Total Transactions**: Count of transactions with success rate (collected vs total)
 - **Fees & Taxes Collected**: Service charges and IMTT (Intermediated Money Transfer Tax)
 - **Transaction Table**: Complete list of all remittances with:
-  - Voucher reference number
+  - Transaction reference number
   - Sender name and branch
   - Beneficiary name and city
   - Amount and currency
@@ -53,18 +53,18 @@ When Tendai in Harare sends $350 to Chipo in Bulawayo:
 
 ### 2. 💸 **Transactions** 
 
-**Purpose**: Real-time transaction management and voucher operations
+**Purpose**: Real-time transaction management and operations
 
 **What You See**:
 - **Total Remittance Volume**: Live tally of money in transit
 - **Ready for Collection**: Amount held in escrow waiting for beneficiary pickup
 - **Disbursed & Settled**: Successfully completed transactions
-- **Transaction Lookup**: Search by voucher reference or phone number
-- **Voucher Status Tracking**: Monitor individual transaction progress
+- **Transaction Lookup**: Search by transaction reference or phone number
+- **Transaction Status Tracking**: Monitor individual transaction progress
 - **T24 Integration Status**: Connection to core banking system
 
 **Key Actions**:
-- 🔍 **Direct Search**: Instant lookup by voucher reference or phone
+- 🔍 **Direct Search**: Instant lookup by transaction reference or phone
 - 📄 **View Transaction Details**: Complete remittance information modal
 - ↩️ **Transaction Reversals**: Cancel/reverse failed transactions (if authorized)
 - 🔔 **Resend SMS**: Re-notify beneficiary if message wasn't received
@@ -83,7 +83,7 @@ When Tendai in Harare sends $350 to Chipo in Bulawayo:
 - **Delivery Exceptions**: Failed/queued messages requiring attention
 - **SMS Log Table**: Complete audit trail with:
   - Recipient phone number
-  - Message type (Voucher Ready, Collection Confirmed, etc.)
+  - Message type (Transaction Ready, Collection Confirmed, etc.)
   - Delivery timestamp
   - Gateway status (Delivered, Pending, Failed)
   - Cost per message

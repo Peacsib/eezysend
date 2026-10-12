@@ -16,7 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { ReportTransaction } from "@/lib/types";
-import VoucherPrintSlip from "./VoucherPrintSlip";
+import TransactionPrintSlip from "./TransactionPrintSlip";
 import StatusBadge from "@/components/ui/StatusBadge";
 
 interface TransactionDetailModalProps {
@@ -42,7 +42,7 @@ export default function TransactionDetailModal({
 
   const handlePrint = () => {
     const originalTitle = document.title;
-    document.title = `EezySend_Voucher_${transaction.transactionReference || 'Slip'}`;
+    document.title = `EezySend_Transaction_${transaction.transactionReference || 'Slip'}`;
     window.print();
     setTimeout(() => {
       document.title = originalTitle;
@@ -77,9 +77,9 @@ export default function TransactionDetailModal({
 
   return (
     <>
-      {/* 1. Printable Official Voucher Document */}
+      {/* 1. Printable Official Transaction Document */}
       <div className="hidden print:block">
-        <VoucherPrintSlip transaction={transaction} />
+        <TransactionPrintSlip transaction={transaction} />
       </div>
 
       {/* 2. Interactive Modal */}
@@ -325,7 +325,7 @@ export default function TransactionDetailModal({
                 className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl transition-colors shadow-2xs"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                <span>Reverse Voucher</span>
+                <span>Reverse Transaction</span>
               </button>
             )}
             <button
