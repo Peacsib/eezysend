@@ -394,9 +394,6 @@ export default function TransactionsTab() {
       {loading && !initialLoaded ? (
         <InstitutionalLoading
           variant="page"
-          title="Synchronizing Live Transactions"
-          subtitle="Connecting to EezySend Core Banking feed. Verifying real-time escrow, disbursement, and settlement states..."
-          badgeText="LIVE CORE BANKING FEED"
           error={loadError}
           onRetry={loadData}
         />
@@ -542,12 +539,7 @@ export default function TransactionsTab() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-12 px-4 text-center">
-                    <InstitutionalLoading
-                      variant="inline"
-                      title="Updating Live Records"
-                      subtitle="Fetching live settlement transactions from core banking feed..."
-                      badgeText="SYNCHRONIZING FEED"
-                    />
+                    <InstitutionalLoading variant="inline" />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (

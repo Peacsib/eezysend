@@ -289,9 +289,6 @@ export default function SMSTab() {
       {loading && !initialLoaded ? (
         <InstitutionalLoading
           variant="page"
-          title="Connecting to SMS Gateway Logs"
-          subtitle="Synchronizing live carrier transmission receipts, delivery statuses, and dispatch queues..."
-          badgeText="LIVE SMS GATEWAY FEED"
           error={loadError}
           onRetry={loadData}
         />
@@ -427,12 +424,7 @@ export default function SMSTab() {
               {loading ? (
                 <tr>
                   <td colSpan={5} className="py-12 px-4 text-center">
-                    <InstitutionalLoading
-                      variant="inline"
-                      title="Updating SMS Logs"
-                      subtitle="Fetching live carrier delivery logs from gateway..."
-                      badgeText="SYNCHRONIZING FEED"
-                    />
+                    <InstitutionalLoading variant="inline" />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (

@@ -292,9 +292,6 @@ export default function ReportsTab() {
       {loading && !initialLoaded ? (
         <InstitutionalLoading
           variant="page"
-          title="Synchronizing Live Remittance Reports"
-          subtitle="Establishing secure link with EezySend Core Banking cluster. Loading live settlement records..."
-          badgeText="LIVE CORE BANKING FEED"
           error={loadError}
           onRetry={loadData}
         />
@@ -436,12 +433,7 @@ export default function ReportsTab() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-12 px-4 text-center">
-                    <InstitutionalLoading
-                      variant="inline"
-                      title="Updating Live Records"
-                      subtitle="Fetching live settlement transactions from core banking feed..."
-                      badgeText="SYNCHRONIZING FEED"
-                    />
+                    <InstitutionalLoading variant="inline" />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
