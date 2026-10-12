@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   X,
   SearchX,
-  Play,
 } from "lucide-react";
 import { reportsApi, mockReportTransactions } from "@/lib/api";
 import type { ReportTransaction } from "@/lib/types";
@@ -87,16 +86,6 @@ export default function ReportsTab() {
     loadData();
   }, []);
 
-  // Run Settlement / Scheduled Report
-  const handleRunSettlement = async () => {
-    try {
-      showToast('Running settlement cycle...', 'info');
-      await reportsApi.getScheduledReport();
-      showToast('Settlement cycle completed successfully', 'success');
-    } catch {
-      showToast('Settlement cycle recorded', 'success');
-    }
-  };
 
   // Reset pagination to page 1 on filter or search changes
   useEffect(() => {
@@ -249,16 +238,7 @@ export default function ReportsTab() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleRunSettlement}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 shadow-2xs transition-all active:scale-95"
-            title="Trigger scheduled end-of-day settlement"
-          >
-            <Play className="w-3.5 h-3.5 fill-eezysend-blue text-eezysend-blue" />
-            <span>Run Settlement</span>
-          </button>
-
-          {/* Export Dropdown with CSV & XLS options */}
+          {/* Export Dropdown with CSV & XLSX options */}
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
