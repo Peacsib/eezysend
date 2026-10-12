@@ -23,12 +23,16 @@ import { Pagination } from "./Pagination";
 import { DateFilterDropdown } from "./DateFilterDropdown";
 import { downloadViaHttp } from "@/lib/csvExport";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { InteractivePerformanceChart } from "./InteractivePerformanceChart";
 
 export default function ReportsTab() {
   const { showToast } = useToast();
   
   // Navigation segment: 'all' | 'deposits' | 'withdrawals'
   const [filterType, setFilterType] = useState<'all' | 'deposits' | 'withdrawals'>('all');
+  
+  // Chart interaction filter (Year & Month)
+  const [chartFilter, setChartFilter] = useState<{ year: number; month?: number } | null>(null);
   
   // Date range
   const [startDate, setStartDate] = useState<string>(() => {
@@ -39,9 +43,9 @@ export default function ReportsTab() {
   });
   const [isDateFilterActive, setIsDateFilterActive] = useState<boolean>(false);
 
-  // Pagination state
+  // Pagination state (default 50 matching institutional batch size)
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(5);
+  const [pageSize, setPageSize] = useState<number>(50);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
   // Data & loading
@@ -97,9 +101,9 @@ export default function ReportsTab() {
   // Reset pagination to page 1 on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterType, isDateFilterActive, startDate, endDate, searchQuery]);
+  }, [filterType, isDateFilterActive, startDate, endDate, searchQuery, chartFilter]);
 
-  // Filtered dataset: Segment + Date Window + Text Search
+  // Filtered dataset: Segment + Date Window + Text Search + Chart Filter
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return transactions.filter(t => {
@@ -123,6 +127,15 @@ export default function ReportsTab() {
         if (endDate && txDate > endDate) return false;
       }
 
+      // 2b. Interactive Performance Chart filter (Year & Month)
+      if (chartFilter && t.dateCreated) {
+        const d = new Date(t.dateCreated);
+        if (!isNaN(d.getTime())) {
+          if (d.getFullYear() !== chartFilter.year) return false;
+          if (chartFilter.month !== undefined && d.getMonth() !== chartFilter.month) return false;
+        }
+      }
+
       // 3. Search query
       if (q) {
         const ref = t.transactionReference?.toLowerCase() || '';
@@ -136,7 +149,7 @@ export default function ReportsTab() {
       }
       return true;
     });
-  }, [transactions, filterType, isDateFilterActive, startDate, endDate, searchQuery]);
+  }, [transactions, filterType, isDateFilterActive, startDate, endDate, searchQuery, chartFilter]);
 
   // Paginated records for table view
   const paginatedRecords = useMemo(() => {
@@ -193,8 +206,8 @@ export default function ReportsTab() {
     };
   }, [filtered]);
 
-  // Clean Export matching meaningful names and CSV / XLSX / XLS formats
-  const handleExport = (format: 'csv' | 'xlsx' | 'xls', scope: 'all' | 'page' = 'all') => {
+  // Clean Export matching meaningful names and CSV / XLSX formats
+  const handleExport = (format: 'csv' | 'xlsx', scope: 'all' | 'page' = 'all') => {
     setShowExportMenu(false);
     const dataToExport = scope === 'page' ? paginatedRecords : filtered;
     if (dataToExport.length === 0) {
@@ -223,7 +236,7 @@ export default function ReportsTab() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full mx-auto">
       {/* 1. Header: Calm, clean, no clutter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>
@@ -326,8 +339,26 @@ export default function ReportsTab() {
         />
       </KpiGrid>
 
-      {/* 3. Responsive Controls Bar */}
-      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pt-1">
+      {/* 2.5 Interactive Performance Line Graph (Monthly & Yearly Trends) */}
+      <InteractivePerformanceChart
+        transactions={transactions}
+        selectedFilter={chartFilter}
+        onSelectFilter={(f) => {
+          setChartFilter(f);
+          setCurrentPage(1);
+        }}
+        onGenerateReport={() => {
+          const section = document.getElementById('reports-data-section');
+          if (section) {
+            section.scrollIntoView({ behavior: 'smooth' });
+          }
+          showToast(`Displaying ${filtered.length} report records for the selected timeline`, 'info');
+        }}
+      />
+
+      {/* 3. Responsive Controls Bar & Data Table (scroll to view) */}
+      <div id="reports-data-section" className="space-y-4 pt-1">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pt-1">
         {/* Left: Segmented Tabs */}
         <div className="inline-flex p-1 rounded-xl bg-white/40 backdrop-blur-sm border border-slate-200/80 self-start">
           <button
@@ -541,6 +572,7 @@ export default function ReportsTab() {
         onPageChange={setCurrentPage}
         onPageSizeChange={setPageSize}
       />
+      </div>
     </div>
   );
 }

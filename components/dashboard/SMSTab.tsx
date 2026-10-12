@@ -41,9 +41,9 @@ export default function SMSTab() {
   const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [isDateFilterActive, setIsDateFilterActive] = useState<boolean>(false);
 
-  // Pagination state
+  // Pagination state (default 50 matching institutional batch size)
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(5);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   // Data state
   const [smsList, setSmsList] = useState<SMSModel[]>(mockSMSList);
@@ -243,17 +243,6 @@ export default function SMSTab() {
   // Clean CSV Export
   const handleExportCSV = () => {
     if (filtered.length === 0) return;
-    const headers = [
-      "Voucher Reference", "Date Dispatched", "Sender Phone", "Sender Status", "Receiver Phone", "Receiver Status"
-    ];
-    const rows = filtered.map(s => [
-      `"${s.transactionReference}"`,
-      `"${new Date(s.dateCreated).toLocaleString()}"`,
-      `"${s.senderPhone}"`,
-      s.senderStatus ? "Delivered" : "Failed",
-      `"${s.receiverPhone}"`,
-      s.receiverStatus ? "Delivered" : "Failed"
-    ]);
     const today = new Date().toISOString().split('T')[0];
     downloadViaHttp(filtered, 'csv', `EezySend_SMS_Delivery_Report_${today}`, 'sms');
     showToast(`Exported ${filtered.length} SMS logs to CSV`, 'success');
@@ -272,7 +261,7 @@ export default function SMSTab() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full mx-auto">
       {/* 1. Header: Matches ReportsTab exactly */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>

@@ -250,7 +250,7 @@ export default function HealthTab() {
   const latencyInfo = getLatencyInfo(healthData.latencyMs);
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto animate-in fade-in duration-150">
+    <div className="space-y-4 w-full mx-auto animate-in fade-in duration-150">
       {/* 1. Header: Calm, clean, live status indicator */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>

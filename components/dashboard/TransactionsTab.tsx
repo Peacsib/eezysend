@@ -38,7 +38,7 @@ export default function TransactionsTab() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(5);
+  const [pageSize, setPageSize] = useState<number>(50);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
   // Transactions data
@@ -239,8 +239,8 @@ export default function TransactionsTab() {
     };
   }, [transactions]);
 
-  // Clean Export matching meaningful names and CSV / XLSX / XLS formats
-  const handleExport = (format: 'csv' | 'xlsx' | 'xls', scope: 'all' | 'page' = 'all') => {
+  // Clean Export matching meaningful names and CSV / XLSX formats
+  const handleExport = (format: 'csv' | 'xlsx', scope: 'all' | 'page' = 'all') => {
     setShowExportMenu(false);
     const dataToExport = scope === 'page' ? paginatedRecords : filtered;
     if (dataToExport.length === 0) {
@@ -314,7 +314,7 @@ export default function TransactionsTab() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 w-full mx-auto">
       {/* 1. Header: Matches ReportsTab exactly */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>

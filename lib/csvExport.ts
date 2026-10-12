@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { ReportTransaction } from './types';
+import { ReportTransaction, SMSModel } from './types';
 
 /**
  * Exact 25 column headers matching EezySend institutional template:
@@ -56,6 +56,15 @@ export const TRANSACTION_EXPORT_HEADERS = [
   "Sender Town",
   "Tax",
   "Channel"
+] as const;
+
+export const SMS_EXPORT_HEADERS = [
+  "Voucher Reference",
+  "Date Dispatched",
+  "Sender Phone",
+  "Sender Status",
+  "Receiver Phone",
+  "Receiver Status"
 ] as const;
 
 /**
@@ -116,39 +125,37 @@ export const formatExportTax = (tax?: number | string | null): string => {
 };
 
 /**
- * Formats Narrative: e.g. AWAITING_COLLECTION, COLLECTED, REVERSED, or custom narrative
+ * Sanitizes phone numbers by stripping leading + sign (e.g. +263772... -> 263772...)
+ * to prevent Excel formula interpretation (#NAME? error) and match standard template.
  */
-export const formatExportNarrative = (narrative?: string, dateCollected?: string | null, status?: boolean): string => {
-  if (narrative && narrative.trim() !== '') return narrative.trim();
-  if (status === false) return 'REVERSED';
-  if (dateCollected) return 'COLLECTED';
-  return 'AWAITING_COLLECTION';
-};
-
-// Legacy alias helpers maintained for backwards compatibility
-export const formatCSVDate = formatExportDate;
-export const formatCSVStatus = (narrative?: string, dateCollected?: string | null): string => {
-  const n = (narrative || '').toUpperCase();
-  if (n.includes('REVERSED')) return 'Reversed';
-  if (dateCollected || n.includes('COLLECTED')) return 'Collected';
-  return 'Awaiting Collection';
-};
-export const formatCSVFee = formatExportCharge;
-export const formatCSVAmount = formatExportAmount;
-export const formatCSVName = (first?: string, middle?: string, last?: string): string => {
-  return [first, middle, last].filter(Boolean).join(' ').trim();
+export const formatExportPhone = (phone?: string | null): string => {
+  if (!phone || phone.trim() === '') return '';
+  const trimmed = phone.trim();
+  if (trimmed.startsWith('+')) {
+    return trimmed.slice(1);
+  }
+  return trimmed;
 };
 
 /**
- * Escapes XML/HTML characters
+ * Formats Narrative: e.g. AWAITING_COLLECTION, COLLECTED, REVERSED, or custom narrative
  */
-const escapeHtml = (val: unknown): string => {
-  const str = String(val ?? '');
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+export const formatExportNarrative = (narrative?: string, dateCollected?: string | null, status?: boolean): string => {
+  if (status === false) return 'REVERSED';
+  if (dateCollected && dateCollected.trim() !== '') return 'COLLECTED';
+  if (narrative && narrative.trim() !== '') return narrative.trim();
+  return 'AWAITING_COLLECTION';
+};
+
+/**
+ * RFC 4180 standard cell escaping for CSV:
+ * - Null/undefined becomes empty quoted string ""
+ * - Wraps all cells in quotes and escapes internal double-quotes
+ */
+export const formatCSVCell = (val: unknown): string => {
+  if (val === null || val === undefined) return '""';
+  const s = String(val).trim();
+  return `"${s.replace(/"/g, '""')}"`;
 };
 
 /**
@@ -169,38 +176,53 @@ export const getTransactionRowValues = (t: ReportTransaction): (string | number)
   t.receiverFirstName || '',
   t.receiverLastName || '',
   t.receiverNationalId || '',
-  t.receiverPhone || '',
+  formatExportPhone(t.receiverPhone),
   t.receiverTown || '',
   t.senderAddress || '',
   t.senderBranch || '',
   t.senderFirstName || '',
   t.senderLastName || '',
   t.senderNationalId || '',
-  t.senderPhone || '',
+  formatExportPhone(t.senderPhone),
   t.senderTown || '',
   formatExportTax(t.tax),
   t.channel || ''
 ];
 
 /**
- * Generates CSV string matching the exact 25-column specification:
+ * Generates CSV string matching the exact 25-column institutional specification:
  * Header: EezySend Reference ID,T24 Deposit Reference ID,T24 Withdrawal Reference ID,Amount,Charge,Currency,Date Created,Date Collected,Narrative,Receiver Address,Receiver Branch,Receiver Firstname,Receiver Lastname,Receiver National ID,Receiver Phone,Receiver Town,Sender Address,Sender Branch,Sender Firstname,Sender Lastname,Sender National ID,Sender Phone,Sender Town,Tax,Channel
  */
 export const generateTransactionsCSV = (transactions: ReportTransaction[]): string => {
-  const headers = TRANSACTION_EXPORT_HEADERS;
+  const headerLine = TRANSACTION_EXPORT_HEADERS.map(h => `"${h}"`).join(',');
 
   const rows = transactions.map(t => {
     const values = getTransactionRowValues(t);
-    return values.map(val => {
-      const s = String(val ?? '');
-      if (/[",\r\n]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    }).join(',');
+    return values.map(formatCSVCell).join(',');
   });
 
-  return [headers.join(','), ...rows].join('\r\n');
+  return [headerLine, ...rows].join('\r\n');
+};
+
+/**
+ * Generates SMS CSV log matching delivery reporting template
+ */
+export const generateSMSCSV = (smsList: Partial<SMSModel>[]): string => {
+  const headerLine = SMS_EXPORT_HEADERS.map(h => `"${h}"`).join(',');
+
+  const rows = smsList.map(s => {
+    const values = [
+      s.transactionReference || '',
+      formatExportDate(s.dateCreated),
+      formatExportPhone(s.senderPhone),
+      s.senderStatus ? 'Delivered' : 'Failed',
+      formatExportPhone(s.receiverPhone),
+      s.receiverStatus ? 'Delivered' : 'Failed'
+    ];
+    return values.map(formatCSVCell).join(',');
+  });
+
+  return [headerLine, ...rows].join('\r\n');
 };
 
 /**
@@ -241,7 +263,7 @@ export const generateTransactionsWorkbook = async (
       cell.font = {
         name: 'Calibri',
         size: 11,
-        bold: true, // Column heading is BOLD!
+        bold: true, // Column heading is BOLD
         color: { argb: 'FF000000' }
       };
       cell.fill = {
@@ -353,65 +375,13 @@ export const downloadXLSX = (workbookBuffer: Uint8Array, filename: string): void
 };
 
 /**
- * Legacy HTML XLS generation with bold headers
- */
-export const generateTransactionsXLS = (transactions: ReportTransaction[]): string => {
-  const headers = TRANSACTION_EXPORT_HEADERS;
-  
-  const headerHtml = headers
-    .map(h => `<th style="background-color:#ffffff;color:#000000;font-weight:bold;border:1px solid #d1d5db;padding:6px 10px;text-align:left;font-family:Calibri,Arial,sans-serif;font-size:11pt;white-space:nowrap;">${escapeHtml(h)}</th>`)
-    .join('');
-  
-  const rowsHtml = transactions.map(t => {
-    const values = getTransactionRowValues(t);
-    const tds = values.map(val => {
-      return `<td style="background-color:#ffffff;color:#000000;border:1px solid #d1d5db;padding:4px 8px;font-family:Calibri,Arial,sans-serif;font-size:11pt;text-align:left;white-space:nowrap;mso-number-format:'\\@';">${escapeHtml(val)}</td>`;
-    }).join('');
-
-    return `<tr>${tds}</tr>`;
-  }).join('');
-
-  return `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <!--[if gte mso 9]>
-    <xml>
-      <x:ExcelWorkbook>
-        <x:ExcelWorksheets>
-          <x:ExcelWorksheet>
-            <x:Name>Page 1 (1-${Math.min(transactions.length, 50)})</x:Name>
-            <x:WorksheetOptions>
-              <x:DisplayGridlines/>
-            </x:WorksheetOptions>
-          </x:ExcelWorksheet>
-        </x:ExcelWorksheets>
-      </x:ExcelWorkbook>
-    </xml>
-    <![endif]-->
-    <style>
-      table { border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
-      th { font-weight: bold; background-color: #ffffff; color: #000000; border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; }
-      td { background-color: #ffffff; color: #000000; border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; mso-number-format: '\\@'; }
-    </style>
-  </head>
-  <body>
-    <table>
-      <thead><tr>${headerHtml}</tr></thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  </body>
-</html>`.trim();
-};
-
-/**
  * Triggers a native HTTP download via the server /api/export endpoint.
  * This guarantees the browser's download manager receives standard
- * Content-Disposition headers and sets the exact filename and .csv / .xlsx / .xls extension.
+ * Content-Disposition headers and sets the exact filename and .csv / .xlsx extension.
  */
 export const downloadViaHttp = (
   data: unknown,
-  format: 'csv' | 'xls' | 'xlsx',
+  format: 'csv' | 'xlsx',
   filename: string,
   type: 'transactions' | 'sms' = 'transactions'
 ): void => {

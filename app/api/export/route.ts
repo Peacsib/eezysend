@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { generateTransactionsCSV, generateTransactionsWorkbook, generateTransactionsXLS } from '@/lib/csvExport';
-import type { ReportTransaction } from '@/lib/types';
+import { generateTransactionsCSV, generateTransactionsWorkbook, generateSMSCSV } from '@/lib/csvExport';
+import type { ReportTransaction, SMSModel } from '@/lib/types';
 
 export async function POST(req: Request) {
   try {
@@ -16,29 +16,13 @@ export async function POST(req: Request) {
 
     const data = JSON.parse(rawData);
 
+    // SMS Notifications Report
     if (type === 'sms') {
-      const headers = [
-        "Voucher Reference", "Date Dispatched", "Sender Phone", "Sender Status", "Receiver Phone", "Receiver Status"
-      ];
-      const rows = data.map((s: {
-        transactionReference?: string;
-        dateCreated?: string;
-        senderPhone?: string;
-        senderStatus?: boolean;
-        receiverPhone?: string;
-        receiverStatus?: boolean;
-      }) => [
-        `"${s.transactionReference || ''}"`,
-        `"${s.dateCreated ? new Date(s.dateCreated).toLocaleString() : ''}"`,
-        `"${s.senderPhone || ''}"`,
-        s.senderStatus ? "Delivered" : "Failed",
-        `"${s.receiverPhone || ''}"`,
-        s.receiverStatus ? "Delivered" : "Failed"
-      ]);
-      const csv = [headers.join(","), ...rows.map((r: string[]) => r.join(","))].join("\n");
+      const smsList = data as SMSModel[];
+      const csvContent = generateSMSCSV(smsList);
       const safeFilename = filename.endsWith('.csv') ? filename : `${filename}.csv`;
 
-      return new Response('\uFEFF' + csv, {
+      return new Response('\uFEFF' + csvContent, {
         status: 200,
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
@@ -50,26 +34,21 @@ export async function POST(req: Request) {
     // Remittance / Transactions report
     const transactions = data as ReportTransaction[];
     if (format === 'xlsx' || format === 'xls') {
-      const isXlsx = format === 'xlsx' || !filename.endsWith('.xls');
       const buffer = await generateTransactionsWorkbook(transactions, 50);
-      const ext = isXlsx ? '.xlsx' : '.xls';
-      const safeFilename = filename.endsWith(ext)
+      const safeFilename = filename.endsWith('.xlsx')
         ? filename
-        : filename.replace(/\.(xls|xlsx)$/, '') + ext;
-      const contentType = isXlsx
-        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        : 'application/vnd.ms-excel';
+        : filename.replace(/\.(xls|xlsx)$/, '') + '.xlsx';
 
       return new Response(buffer as unknown as BodyInit, {
         status: 200,
         headers: {
-          'Content-Type': contentType,
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
         },
       });
     }
 
-    // Default: CSV matching exact remittance template
+    // Default: CSV matching exact remittance template (25 columns)
     const csvContent = generateTransactionsCSV(transactions);
     const safeFilename = filename.endsWith('.csv') ? filename : `${filename}.csv`;
 
