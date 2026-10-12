@@ -16,7 +16,6 @@ import { reportsApi } from "@/lib/api";
 import type { ReportTransaction } from "@/lib/types";
 import { TransactionFullView } from "./TransactionFullView";
 import { useToast } from "@/components/ui/Toast";
-import { LoadingSpinner, TableSkeleton } from "@/components/ui/LoadingSpinner";
 import InstitutionalLoading from "@/components/ui/InstitutionalLoading";
 import { KpiCard, KpiGrid } from "./KpiCard";
 import { Pagination } from "./Pagination";
@@ -222,7 +221,7 @@ export default function ReportsTab() {
   }
 
   return (
-    <div className="space-y-6 w-full mx-auto">
+    <div className={`space-y-6 w-full mx-auto ${loading && !initialLoaded ? 'flex flex-col min-h-[calc(100vh-10rem)]' : ''}`}>
       {/* 1. Header: Calm, clean, no clutter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>

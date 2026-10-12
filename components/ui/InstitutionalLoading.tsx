@@ -177,7 +177,7 @@ export function InstitutionalLoading({
 
   // Variant 'page'
   return (
-    <div className="py-24 px-4 flex items-center justify-center animate-in fade-in duration-150">
+    <div className="w-full flex-1 min-h-[55vh] sm:min-h-[60vh] lg:min-h-[65vh] flex flex-col items-center justify-center px-4 animate-in fade-in duration-150">
       {content}
     </div>
   );

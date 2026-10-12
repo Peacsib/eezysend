@@ -22,7 +22,6 @@ import {
 import { smsApi, transactionsApi } from "@/lib/api";
 import type { SMSModel, ReportTransaction } from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
-import { TableSkeleton } from "@/components/ui/LoadingSpinner";
 import InstitutionalLoading from "@/components/ui/InstitutionalLoading";
 import { downloadViaHttp } from "@/lib/csvExport";
 import { KpiCard, KpiGrid } from "./KpiCard";
@@ -263,7 +262,7 @@ export default function SMSTab() {
   }
 
   return (
-    <div className="space-y-6 w-full mx-auto">
+    <div className={`space-y-6 w-full mx-auto ${loading && !initialLoaded ? 'flex flex-col min-h-[calc(100vh-10rem)]' : ''}`}>
       {/* 1. Header: Matches ReportsTab exactly */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div>
