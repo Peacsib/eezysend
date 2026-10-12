@@ -347,13 +347,6 @@ export default function ReportsTab() {
           setChartFilter(f);
           setCurrentPage(1);
         }}
-        onGenerateReport={() => {
-          const section = document.getElementById('reports-data-section');
-          if (section) {
-            section.scrollIntoView({ behavior: 'smooth' });
-          }
-          showToast(`Displaying ${filtered.length} report records for the selected timeline`, 'info');
-        }}
       />
 
       {/* 3. Responsive Controls Bar & Data Table (scroll to view) */}
