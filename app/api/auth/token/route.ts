@@ -5,8 +5,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
 
 export async function POST(request: Request) {
   try {
-    const key = process.env.EEZYSEND_API_KEY || 'eezysendui';
-    const secret = process.env.EEZYSEND_API_SECRET || '304bb2b63cd544feb6524055520fefea';
+    const key = process.env.EEZYSEND_API_KEY;
+    const secret = process.env.EEZYSEND_API_SECRET;
 
     if (!key || !secret) {
       return NextResponse.json(

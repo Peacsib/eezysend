@@ -69,7 +69,6 @@ export default function ReportsTab() {
         setTransactions([]);
       }
     } catch (err: unknown) {
-      console.error("Live report fetch error:", err);
       setLoadError(err instanceof Error ? err.message : "Failed to connect to live core banking feed.");
       setTransactions([]);
     } finally {

@@ -59,8 +59,7 @@ export async function POST(req: Request) {
         'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
       },
     });
-  } catch (error) {
-    console.error('Export route error:', error);
+  } catch {
     return new NextResponse('Export generation failed', { status: 500 });
   }
 }

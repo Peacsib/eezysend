@@ -31,8 +31,8 @@ class ApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    // Attach Bearer token if present and not a temporary local dummy token
-    if (!headers['Authorization'] && authToken && !authToken.startsWith('temp_token_')) {
+    // Attach Bearer token if present
+    if (!headers['Authorization'] && authToken) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
@@ -93,12 +93,12 @@ class ApiClient {
 
 export const api = new ApiClient(API_BASE_URL);
 
-// Helper to determine if the browser holds a valid production JWT (rather than local demo bypass session)
+// Helper to determine if the browser holds a valid production JWT
 export const hasLiveAuthToken = (): boolean => {
   if (typeof window === 'undefined') return false;
   try {
     const token = localStorage.getItem('auth_token') || '';
-    return Boolean(token && !token.startsWith('temp_token_') && token.length > 20);
+    return Boolean(token && token.length > 20);
   } catch {
     return false;
   }
@@ -109,7 +109,7 @@ export const ensureLiveToken = async (): Promise<string | null> => {
   if (typeof window === 'undefined') return null;
   try {
     const existing = localStorage.getItem('auth_token') || '';
-    if (existing && !existing.startsWith('temp_token_') && existing.length > 20) {
+    if (existing && existing.length > 20) {
       return existing;
     }
     const res = await fetch('/api/auth/token');
@@ -119,8 +119,8 @@ export const ensureLiveToken = async (): Promise<string | null> => {
       if (data.key) localStorage.setItem('eezysend_username', data.key);
       return data.accessToken;
     }
-  } catch (err) {
-    console.warn('Could not auto-fetch live token:', err);
+  } catch {
+    // Fail silently in production
   }
   return null;
 };

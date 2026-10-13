@@ -64,7 +64,6 @@ export default function SMSTab() {
         setSmsList([]);
       }
     } catch (err: unknown) {
-      console.error("Live SMS load error:", err);
       setLoadError(err instanceof Error ? err.message : "Failed to load live SMS logs from gateway.");
       setSmsList([]);
     } finally {

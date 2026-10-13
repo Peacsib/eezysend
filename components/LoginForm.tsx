@@ -10,8 +10,8 @@ export default function LoginForm() {
   const router = useRouter();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
-    username: "admin",
-    password: "password123",
+    username: "",
+    password: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -19,34 +19,35 @@ export default function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
 
-    const user = formData.username.trim() || "eezysendui";
+    const username = formData.username.trim();
+    const password = formData.password.trim();
+
+    if (!username || !password) {
+      showToast("Please enter both username and password.", "error");
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const res = await fetch("/api/auth/token", { method: "POST" });
       const data = await res.json();
-      if (data?.accessToken) {
+      if (res.ok && data?.accessToken) {
         if (typeof window !== "undefined") {
-          localStorage.setItem("eezysend_username", data.key || user);
+          localStorage.setItem("eezysend_username", username);
           localStorage.setItem("auth_token", data.accessToken);
         }
         showToast("Authenticated with EezySend Core Gateway", "success");
         router.push("/dashboard");
         return;
       }
-    } catch (err) {
-      console.warn("Live gateway connection fallback:", err);
+      showToast(data?.error || "Invalid credentials or authorization failed", "error");
+    } catch {
+      showToast("Unable to reach authentication gateway. Please check network connection.", "error");
+    } finally {
+      setIsLoading(false);
     }
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("eezysend_username", user);
-      localStorage.setItem("auth_token", "temp_token_" + Date.now());
-    }
-
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 150);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

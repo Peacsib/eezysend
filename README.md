@@ -167,9 +167,9 @@ The portal connects directly to the EezySend Core Banking cluster:
    NEXT_PUBLIC_APP_NAME=EezySend
    NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-   # EezySend Production API Credentials
-   EEZYSEND_API_KEY=eezysendui
-   EEZYSEND_API_SECRET=304bb2b63cd544feb6524055520fefea
+   # EezySend Core Gateway Credentials (Obtain from System Administrator)
+   EEZYSEND_API_KEY=your_api_key_here
+   EEZYSEND_API_SECRET=your_api_secret_here
    ```
 
 4. Run the development server:

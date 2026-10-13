@@ -60,7 +60,6 @@ export default function TransactionsTab() {
         setTransactions([]);
       }
     } catch (err: unknown) {
-      console.error("Live transactions load error:", err);
       setLoadError(err instanceof Error ? err.message : "Failed to load live transactions from core banking feed.");
       setTransactions([]);
     } finally {

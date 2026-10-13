@@ -17,10 +17,17 @@ export default function DashboardPage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(272);
 
-  // Initialize live production token from .env.local if not present
+  // Verify authenticated session and ensure token integrity
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        router.replace("/");
+        return;
+      }
+    }
     ensureLiveToken();
-  }, []);
+  }, [router]);
 
   // Restore saved width from localStorage
   React.useEffect(() => {
@@ -83,6 +90,7 @@ export default function DashboardPage() {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth_token");
+      localStorage.removeItem("eezysend_username");
       sessionStorage.clear();
     }
     router.push("/");
